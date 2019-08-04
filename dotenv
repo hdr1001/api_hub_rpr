@@ -1,0 +1,7 @@
+ext_port=[External port HTTP server]
+pg_pwd=[Postgresql password]
+dpl_usr=[D&B Direct+ consumer key]
+dpl_pwd=[D&B Direct+ consumer secret]
+d2o_usr=[D&B Direct 2.0 user]
+d2o_pwd=[D&B Direct 2.0 password]
+
