@@ -1,0 +1,10 @@
+{
+   "user": "postgres",
+   "database": "postgres",
+   "password": "ph_pg_pwd",
+   "host": "ah_rpr_postgres",
+   "port": 5432,
+   "max": 10,
+   "idleTimeoutMillis": 30000
+}
+

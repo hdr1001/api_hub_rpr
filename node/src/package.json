@@ -1,0 +1,21 @@
+{
+  "name": "ah_rpr_node",
+  "version": "1.0.0",
+  "description": "API Hub; request, persist & response",
+  "main": "ah_rpr_ws.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ah_rpr_ws.js"
+  },
+  "author": "Hans de Rooij",
+  "repository": {
+    "type" : "git",
+    "url" : "https://github.com/hdr1001/api_hub_rpr.git"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "express": "^4.16.x",
+    "pg": "*"
+  }
+}
+

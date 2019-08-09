@@ -1,4 +1,5 @@
 .env
+postgres-data/
 apache2/SSL/*.crt
 apache2/SSL/*.key
 
