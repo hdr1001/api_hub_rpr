@@ -25,7 +25,7 @@
 -- ALTER TABLE public.auth_tokens DROP CONSTRAINT auth_tokens_pkey;
 -- ALTER TABLE public.products DROP CONSTRAINT products_pkey;
 -- ALTER TABLE public.archive_cmpelk DROP CONSTRAINT archive_cmpelk_pkey;
--- DROP INDEX public.auth_tokens_id_desc_idx;
+-- DROP INDEX public.auth_tokens_api_id_desc_idx;
 -- DROP TABLE public.auth_tokens;
 -- DROP TABLE public.products;
 -- DROP TABLE public.archive_cmpelk;
@@ -62,6 +62,7 @@ CREATE SEQUENCE public.auth_tokens_id_seq
 CREATE TABLE public.auth_tokens
 (
     id integer NOT NULL DEFAULT nextval('auth_tokens_id_seq'::regclass),
+    api char(3),
     token character varying(128) COLLATE pg_catalog."default",
     expires_in bigint,
     obtained_at bigint,
@@ -122,9 +123,9 @@ TABLESPACE pg_default;
 --TABLESPACE pg_default;
 
 -- Create an index for reverse sorting on id in table auth_tokens
-CREATE UNIQUE INDEX auth_tokens_id_desc_idx
+CREATE UNIQUE INDEX auth_tokens_api_id_desc_idx
     ON public.auth_tokens USING btree
-    (id DESC NULLS LAST)
+    (api, id DESC NULLS LAST)
     TABLESPACE pg_default;
 
 -- Create a function to archive a Direct+ cmpelk product
@@ -147,5 +148,6 @@ CREATE UNIQUE INDEX auth_tokens_id_desc_idx
 --    EXECUTE PROCEDURE public.f_archive_cmpelk();
 
 -- Insert a couple of default records
-INSERT INTO auth_tokens (token, expires_in, obtained_at) VALUES('', 0, 946681200000);
+INSERT INTO auth_tokens (api, token, expires_in, obtained_at) VALUES('dpl', '', 0, 946681200000);
+INSERT INTO auth_tokens (api, token, expires_in, obtained_at) VALUES('d2o', '', 0, 946681200000);
 

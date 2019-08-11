@@ -24,8 +24,8 @@
 // *********************************************************************
 'use strict';
 
-//D&B Direct+ initialization
-//const api = require('./api_rnp_objs.js');
+//Initialize the hub's foundational objects
+const api = require('./ah_rpr_objs.js');
 
 //Use the express library for the web services infrastructure
 const express = require('express');
