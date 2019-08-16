@@ -55,9 +55,9 @@ app.get('/hub', (req, res) => {
    res.setHeader('Content-Type', 'application/json');
    res.send(JSON.stringify(ret, null, 3));
 });
-/*
+
 //Return the cmpelk product for a particular DUNS
-app.get('/api/cmpelk/:sDUNS', (req, res) => {
+app.get('/hub/cmpelk/:sDUNS', (req, res) => {
    const oDUNS = api.getCmpelk(req.params.sDUNS, req.query.forceNew);
 
    oDUNS.on('onLoad', () => {
@@ -71,6 +71,8 @@ app.get('/api/cmpelk/:sDUNS', (req, res) => {
    });
 });
 
+/*
+/
 //Return the cmptcs product for a particular DUNS
 app.get('/api/cmptcs/:sDUNS', (req, res) => {
    const oDUNS = api.getCmptcs(req.params.sDUNS, req.query.forceNew);

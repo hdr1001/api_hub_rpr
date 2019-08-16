@@ -23,11 +23,11 @@
 -- DROP TRIGGER trgr_archive_cmpelk ON public.products;
 -- DROP FUNCTION public.f_archive_cmpelk();
 -- ALTER TABLE public.auth_tokens DROP CONSTRAINT auth_tokens_pkey;
--- ALTER TABLE public.products DROP CONSTRAINT products_pkey;
+-- ALTER TABLE public.products_dnb DROP CONSTRAINT products_dnb_pkey;
 -- ALTER TABLE public.archive_cmpelk DROP CONSTRAINT archive_cmpelk_pkey;
 -- DROP INDEX public.auth_tokens_api_id_desc_idx;
 -- DROP TABLE public.auth_tokens;
--- DROP TABLE public.products;
+-- DROP TABLE public.products_dnb;
 -- DROP TABLE public.archive_cmpelk;
 -- DROP TABLE public.id_res;
 -- DROP SEQUENCE public.auth_tokens_id_seq;
@@ -73,23 +73,23 @@ WITH (
 )
 TABLESPACE pg_default;
 
--- Create table for storing Direct+ data products
---CREATE TABLE public.products (
---    duns character varying(11) COLLATE pg_catalog."default",
---    cmpelk JSONB,
---    cmpelk_obtained_at bigint,
+-- Create table for storing D&B data products
+CREATE TABLE public.products_dnb (
+    duns character varying(11) COLLATE pg_catalog."default",
+    cmpelk JSONB,
+    cmpelk_obtained_at bigint,
 --    cmptcs JSONB,
 --    cmptcs_obtained_at bigint,
 --    CMP_VRF_ID JSONB,
 --    CMP_VRF_ID_obtained_at bigint,
 --    CMP_BOS JSONB,
 --    CMP_BOS_obtained_at bigint,
---    CONSTRAINT products_pkey PRIMARY KEY (duns)
---)
---WITH (
---    OIDS = false
---)
---TABLESPACE pg_default;
+    CONSTRAINT products_dnb_pkey PRIMARY KEY (duns)
+)
+WITH (
+    OIDS = false
+)
+TABLESPACE pg_default;
 
 -- Create table for archiving a cmpelk Direct+ data product
 --CREATE TABLE public.archive_cmpelk

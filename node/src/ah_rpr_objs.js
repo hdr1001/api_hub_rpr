@@ -28,6 +28,28 @@ const apis = ['dpl', 'd2o'];
 const apiDpl = 0; //D&B Direct+
 const apiD2o = 1; //D&B Direct 2.0 Onboard
 
+//Provider hosting the API
+const providers = ['dnb'];
+
+const prvdrDnb = 0; //D&B (Dun & Bradstreet)
+
+//Identifying keys
+const keys = ['duns'];
+
+const keyDnb = 0; //D&B (i.e. DUNS)
+
+//Supported products
+const products = [
+   {  prodID: 'cmpelk',
+      api: apis[apiDpl],
+      provider: providers[prvdrDnb],
+      key: keys[keyDnb],
+      versions: ['v1', 'v2']
+   }
+]
+
+const cmpelk = 0;
+
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
 
@@ -85,68 +107,149 @@ const sqlPrepStmts = {
          text: sSQL,
          values: [this._api]
       };
+   },
+
+   insDataProduct: function() {
+      let sSQL = 'INSERT INTO products_' + this._product.provider + ' ';
+      sSQL += '(' + this._product.key + ', ' + this._product.prodID + ', ' + this._product.prodID + '_obtained_at) ';
+      sSQL += 'VALUES ($1, $2, $3) ';
+      sSQL += 'ON CONFLICT (duns) DO UPDATE SET ';
+      sSQL += this._product.prodID + ' = $2, ';
+      sSQL += this._product.prodID + '_obtained_at = $3';;
+      //console.log('SQL insDataProduct -> ' + sSQL);
+
+      return {
+         name: 'ins_' + this._product.prodID,
+         text: sSQL,
+         values: [this._sKey, this._rawRsltProduct.replace(/'/g, "''"), this._obtainedAt]
+      };
+   },
+              
+   getDataProduct: function() {
+      let sSQL = 'SELECT ' + this._product.key + ', ' + this._product.prodID + ' AS product, ';
+      sSQL += this._product.prodID + '_obtained_at AS poa FROM products_' + this._product.provider + ' ';
+      sSQL += 'WHERE ' + this._product.key + ' = $1;';
+      //console.log('SQL getDataProduct -> ' + sSQL);
+
+      return {
+         name: 'get_' + this._product.prodID,
+         text: sSQL,
+         values: [this._sKey]
+      };
    }
 };
 
 //API parameters for HTTP transaction
 const apiParams = {
    [apis[apiDpl]]: { //D&B Direct+
-      getHttpAttr: function() {
-         const ret = {
-            host: 'plus.dnb.com',
-            path: '/v2/token',
-            method: 'POST',
-            headers: {
-               'Content-Type': 'application/json',
-               Origin: 'www.dnb.com',
-               Authorization: 'Basic '
-            }
-         };
+      authToken: {
+         getHttpAttr: function() {
+            const ret = {
+               host: 'plus.dnb.com',
+               path: '/v2/token',
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Origin: 'www.dnb.com',
+                  Authorization: 'Basic '
+               }
+            };
 
-         let dpl_credentials = require('./creds/dpl.json');
-         let buff = new Buffer(dpl_credentials.usrID + ':' + dpl_credentials.pwd);
-         let b64 = buff.toString('Base64');
-         ret.headers.Authorization += b64;
+            let dpl_credentials = require('./creds/dpl.json');
+            let buff = new Buffer(dpl_credentials.usrID + ':' + dpl_credentials.pwd);
+            let b64 = buff.toString('Base64');
+            ret.headers.Authorization += b64;
 
-         return ret;
+            return ret;
+         },
+
+         getHttpPostBody: function() {
+            return '{ "grant_type" : "client_credentials" }';
+         }
       },
+      dataProduct: {
+         getHttpAttr: function() {
+            const ret = {
+               host: 'plus.dnb.com',
+               path: '/v1/data/duns',
+               method: 'GET',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Origin: 'www.dnb.com'
+               }
+            }
 
-      getHttpPostBody: function() {
-         return '{ "grant_type" : "client_credentials" }';
+            const oQryStr = {
+               productId: this._product.prodID,
+               versionId: this._versionID
+            };
+
+            ret.path += '/' + this._sKey + '?' + qryStr.stringify(oQryStr);
+            ret.headers.Authorization = dplAuthToken.toString();
+
+            return ret;
+         }
       }
    },
-   [apis[apiD2o]]: { //D&B Direct 2.0 Onboard
-      getHttpAttr: function() {
-         const ret = {
-            host: 'direct.dnb.com',
-            path: '/Authentication/V2.0/',
-            method: 'POST',
-            headers: {
-               'Content-Type': 'application/json'
-            }
-         };
+   [apis[apiD2o]]: { //D&B Direct 2.0 Onboad
+      authToken: {
+         getHttpAttr: function() {
+            const ret = {
+               host: 'direct.dnb.com',
+               path: '/Authentication/V2.0/',
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json'
+               }
+            };
 
-         let d2o_credentials = require('./creds/d2o.json');
-         ret.headers['x-dnb-user'] = d2o_credentials.usrID;
-         ret.headers['x-dnb-pwd'] = d2o_credentials.pwd;
+            let d2o_credentials = require('./creds/d2o.json');
+            ret.headers['x-dnb-user'] = d2o_credentials.usrID;
+            ret.headers['x-dnb-pwd'] = d2o_credentials.pwd;
 
-         return ret; 
+            return ret; 
+         },
+
+         getHttpPostBody: function() {
+            const ret = {
+               TransactionDetail: {
+                  ApplicationTransactionID: 'Node.js object code',
+               }
+            };
+
+            let rnd = Math.floor(Math.random() * 10000) + 1;
+            let dtNow = new Date();
+
+            ret.TransactionDetail.ServiceTransactionID = rnd.toString();
+            ret.TransactionDetail.TransactionTimestamp = dtNow.toISOString();
+
+            return ret;
+         }
       },
+      dataProduct: {
+         getHttpAttr: function() {
+            const ret = {
+               host: 'direct.dnb.com',
+               path: '/' + this._versionID + '/organizations/' + this._sKey + '/products/' + this._prodID,
+               method: 'GET',
+               headers: {
+                  'Content-Type': 'application/json'
+               }
+            };
 
-      getHttpPostBody: function() {
-         const ret = {
-            TransactionDetail: {
-               ApplicationTransactionID: 'Node.js object code',
+            const oQryStr = {
+               OrderReasonCode: '6332'
+            };
+
+            if(this._prodID === cmp_bos.prodID) {
+               oQryStr.OwnershipPercentage = '25';
             }
-         };
 
-         let rnd = Math.floor(Math.random() * 10000) + 1;
-         let dtNow = new Date();
+            ret.path += '?' + qryStr.stringify(oQryStr);
+            ret.headers.Authorization = d2oAuthToken.toString();
 
-         ret.TransactionDetail.ServiceTransactionID = rnd.toString();
-         ret.TransactionDetail.TransactionTimestamp = dtNow.toISOString();
-
-         return ret;
+            return ret;
+         }
       }
    }
 };
@@ -156,10 +259,22 @@ const iniApi = api => {
    api = api || apis[apiDpl];
 
    if(apis.indexOf(api) === -1) {
-      throw new Error('API specified not valid');
+      throw new Error('API specified is not valid');
    }
 
    return api;
+};
+
+const iniProd = prodID => {
+   prodID = prodID || products[cmpelk].prodID;
+
+   try {
+      return products.find(oProd => oProd.prodID === prodID);
+   }
+   catch(err) {
+      console.log('Product ID ' + prodID + ' is not valid');
+      throw err;
+   }
 };
 
 //Get the most recent authorization token from the database,
@@ -191,7 +306,7 @@ function getAuthTokenDB() {
          });
       });
    });
-};
+}
 
 //Write an authorization token to the database
 function authTokenToDB() {
@@ -214,12 +329,12 @@ function authTokenToDB() {
          });
       });
    });
-};
+}
 
 //Function returning the result of the REST call as a promise
 function getAuthTokenAPI() {
-   const httpAttr = apiParams[this._api].getHttpAttr();
-   const httpPostBody = apiParams[this._api].getHttpPostBody();
+   const httpAttr = apiParams[this._api].authToken.getHttpAttr();
+   const httpPostBody = apiParams[this._api].authToken.getHttpPostBody();
 
    return new Promise((resolve, reject) => {
       const httpPost = https.request(httpAttr, resp => {
@@ -261,7 +376,7 @@ function getAuthTokenAPI() {
       }
       httpPost.end();
    });
-};
+}
 
 //Process the results returned from the call to retrieve a token from the database
 function processAuthTokenDB(rowCount) {
@@ -302,13 +417,13 @@ function parseJsonToken(jsonToken) {
          this._expiresIn = 86400; //Specified in the documentation
          break;
 
-         default:
+      default:
          console.log('Unsupported API parsing JSON token');
-      }
+   }
 
    //Update the values of the object's private member variables
    return oToken;
-};
+}
 
 //Process the results returned from the API call to retrieve a token online
 function processAuthTokenAPI(jsonAuthToken) {
@@ -426,3 +541,280 @@ class AuthToken extends EvntEmit {
 let dplAuthToken; setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl])}, 2500);
 let d2oAuthToken; setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
 
+//Validate the key associated with the data product
+function iniKey(sKey) {
+   switch(this._product.key) {
+      case keys[keyDnb]: // i.e. DUNS
+         //Remove dashes from sKey submitted and, if shorter than 9 characters, prepend 0's
+         sKey = sKey.replace(/-/g, '');
+         if(sKey.length < 9) {
+            return '000000000'.substring(0, 9 - sKey.length).concat(sKey);
+         }
+         else {
+            return sKey;
+         }
+      default:
+         return sKey;
+   }
+}
+
+function iniForceNew(bForceNew) {
+   //forceNew is false except if query string contains forceNew=true
+   if(typeof bForceNew === 'boolean') {
+      return bForceNew;
+   }
+   else { //String comparison
+      return (bForceNew === 'true');
+   }
+}
+
+function iniVersionID(sVersionID) {
+   //Default product version
+   switch(this._product.prodID) {
+      case products[cmpelk].prodID:
+         if(sVersionID) {
+            if(products[cmpelk].versions.indexOf(sVersionID) === -1) {
+               throw new Error('Product version specified is not valid');
+            }
+            else {
+               return sVersionID;
+            }
+         }
+         else { //Default value is the most recent version
+            return products[cmpelk].versions[products[cmpelk].versions.length - 1];
+         }
+      default:
+         return sVersionID;
+   }
+}
+
+//Get a data product from the database, resolve to 0 if not available
+function getDataProductDB() {
+   return new Promise((resolve, reject) => {
+      let ret_val = 0;
+
+      if(this._forceNew) {
+         resolve(ret_val); //Force new, no need to check the database
+      }
+      else {
+         pgConnPool.connect((err, client, done) => {
+            if(err) {
+               console.log('Error fetching client from pool');
+               reject(err); return;
+            }
+
+            client.query(sqlPrepStmts.getDataProduct.call(this), (err, rslt) => {
+               done(err);
+
+               if(err) {
+                  console.log('Error executing get product from database query');
+                  reject(err); return;
+               }
+
+               if(rslt.rowCount > 0) {
+                  if(rslt.rows[0].product) {
+                     this._oRsltProduct = rslt.rows[0].product;
+                     this._obtainedAt = rslt.rows[0].poa;
+                     this._productDB = true;
+
+                     ret_val = rslt.rowCount;
+                  }
+               }
+
+               resolve(ret_val);
+            });
+         });
+      }
+   });
+}
+
+//Write the data product to the database
+function DataProductToDB() {
+   return new Promise((resolve, reject) => {
+      pgConnPool.connect((err, client, done) => {
+         if(err) {
+            console.log('Error fetching client from pool');
+            reject(err); return;
+         }
+
+         client.query(sqlPrepStmts.insDataProduct.call(this), (err, rslt) => {
+            done(err);
+
+            if(err) {
+               console.log('Error executing persist data product query');
+               reject(err); return;
+            }
+
+            resolve(0);
+         });
+      });
+   });
+}
+
+//Private function returning the result of the data product call as a promise
+function getDataProductAPI() {
+   let httpAttr = apiParams[this._product.api].dataProduct.getHttpAttr.call(this);
+
+   return new Promise((resolve, reject) => {
+      https.request(httpAttr, resp => {
+         var body = [];
+
+         resp.on('error', err => reject(err));
+
+         resp.on('data', chunk => body.push(chunk));
+
+         resp.on('end', () => { //The data product is now available in full
+            //As a first step register when the response was available
+            this._obtainedAt = Date.now();
+            this._productDB = false;
+
+            // ... then process the raw JSON response as returned by the API
+            this._rawRsltProduct = body.join('');
+
+            if(resp.statusCode < 200 || resp.statusCode > 299) {
+               let errMsg = 'API request returned an invalid HTTP status code';
+               errMsg += ' (' + resp.statusCode + ')';
+
+               reject(new Error(errMsg)); return;
+            }
+
+            if(!/^application\/json/.test(resp.headers['content-type'])) {
+               let errMsg = 'Invalid content-type, expected application/json';
+
+               reject(new Error(errMsg)); return;
+            }
+
+            resolve(true);
+         });
+      }).end();
+   });
+}
+
+//Definition of class DataProduct to retrieve API delivered data products
+class DataProduct extends EvntEmit {
+   constructor(sKey, prodID, forceNew, versionID) {
+      super(); //Call necessary to resolve the currect execution context (this) in the extended class
+
+      //Private object properties
+      this._product = iniProd(prodID);                      //Product object has prodID, provider, api & key properties
+      this._sKey = iniKey.call(this, sKey);                 //The key with which the data product is associated
+      this._forceNew = iniForceNew(forceNew);               //If true the product will retrieved online not from the database
+      this._versionID = iniVersionID.call(this, versionID); //The data product version
+      this._productDB = null;                               //Boolean indicating whether the data product was retrieved from the database
+      this._obtainedAt = null;                              //Timestamp -> data product available
+      this._rawRsltProduct = null;                          //The JSON as returned by the API
+      this._oRsltProduct = null;                            //Object representation of the data product
+
+      //This is where the rubber meets the road. Default behaviour of the API
+      //is to first check the database for availability of the requested key.
+      //If the forceNew parameter is set to true the function getDataProductDB
+      //immediately resolves to a row count of zero to, in this way, trigger
+      //an online product request. If forceNew is not true (which is default)
+      //the function getDataProductDB resolves to either 0 or 1, i.e. no
+      //product available or product available on the database.
+      getDataProductDB.call(this)
+         .then(rowCount => {
+            console.log('Retrieved ' + rowCount + ' row(s) for sKey ' + this._sKey);
+
+            //Please note that the row count can be zero becase (1) the forceNew
+            //parameter was set to true or (2) the database does not contain the
+            //sKey requested. Either way, in case the row count returned is zero
+            //a new data product will be requested online.
+            if(rowCount == 0) {
+               return getDataProductAPI.call(this);
+            }
+            //The data product was loaded from the datatabse in function
+            //getDataProductDb. Additional work is needed here but the on
+            //load event can be fired if the row count != zero (i.e. 1)
+            else {
+               emitConstructorEvnt(this, 'onLoad');
+            }
+
+            return false; //Data product loaded was from the database
+         })
+         .then(productAPI => {
+            //There is no need to store the product if it was retrieved from the
+            //database. The parameter rawProduct will evaluate to null if this is
+            //so and the body of the if clause below will not execute. For a data
+            //product loaded from cache the onLoad event has already fired at
+            //this point. In case, however, a new data product was retrieved
+            //(successfully) online, the parameter rawProduct evaluates to true
+            //and the body of the if clause will be processed. First the onLoad
+            //is emitted, then the new product is stored on the database. When
+            //storing new products old products are automatically archived.
+            if(productAPI) {
+               console.log('About to emit onLoad for ' + this._sKey + ' (obtained online)');
+               emitConstructorEvnt(this, 'onLoad');
+
+               DataProductToDB.call(this);
+            }
+         })
+         .catch(err => {
+            const oErr = {err_msg: err.message};
+
+            if(this._rawRsltProduct) {
+               oErr.err_api = JSON.parse(this._rawRsltProduct);
+            }
+
+            this._rawRsltProduct = JSON.stringify(oErr, null, 3);
+
+            console.log('Error occured in constructor DataProduct!');
+            console.log(this._rawRsltProduct);
+
+            console.log('About to emit onError for object of class DataProduct');
+            emitConstructorEvnt(this, 'onError');
+         });
+   }
+
+   //Public object interface
+   get sKey() { //The sKey with which the data product is associated
+      return this._sKey;
+   }
+
+   get forceNew() { //If true the product will be retrieved online not from the database
+      return this._forceNew;
+   }
+
+   get prodID() { //The data product
+      return this._prodID;
+   }
+
+   get versionID() { //Version of the D&B data product
+      return this._versionID;
+   }
+
+   get fromDB() { //Was the data product retrieved from the database?
+      return this._productDB;
+   }
+
+   get obtainedAt() { //Timestamp -> data product available
+      return this._obtainedAt;
+   }
+
+   get rsltJSON() { //JSON as returned by the API
+      if(this._rawRsltProduct) return this._rawRsltProduct;
+
+      if(this._oRsltProduct) {
+         return this.rawRsltProduct = JSON.stringify(this._oRsltProduct);
+      }
+
+      throw new Error('Raw data product results not (yet) available');
+   }
+
+   get rsltObj() {  //Return the data product as a JavaScript object
+      if(this._oRsltProduct) return this._oRsltProduct;
+
+      if(this._rawRsltProduct) {
+         return this._oRsltProduct = JSON.parse(this._rawRsltProduct);
+      }
+
+      throw new Error('Data product results not (yet) available');
+   }
+}
+
+module.exports = {
+   getCmpelk: (DUNS, forceNew, versionID) => {
+      return new DataProduct(DUNS, products[cmpelk].prodID, forceNew, versionID);
+   }
+}
+ 
