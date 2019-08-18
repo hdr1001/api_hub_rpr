@@ -71,10 +71,8 @@ app.get('/hub/cmpelk/:sDUNS', (req, res) => {
    });
 });
 
-/*
-/
 //Return the cmptcs product for a particular DUNS
-app.get('/api/cmptcs/:sDUNS', (req, res) => {
+app.get('/hub/cmptcs/:sDUNS', (req, res) => {
    const oDUNS = api.getCmptcs(req.params.sDUNS, req.query.forceNew);
 
    oDUNS.on('onLoad', () => {
@@ -87,7 +85,7 @@ app.get('/api/cmptcs/:sDUNS', (req, res) => {
       res.send(oDUNS.rsltJSON);
    });
 });
-
+/*
 //Return the cmp_vrf_id product for a particular DUNS
 app.get('/api/cmpvrfid/:sDUNS', (req, res) => {
    const oDUNS = api.getCmpVrfID(req.params.sDUNS, req.query.forceNew);

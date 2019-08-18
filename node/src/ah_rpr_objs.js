@@ -45,10 +45,18 @@ const products = [
       provider: providers[prvdrDnb],
       key: keys[keyDnb],
       versions: ['v1', 'v2']
+   },
+
+   {  prodID: 'cmptcs',
+      api: apis[apiDpl],
+      provider: providers[prvdrDnb],
+      key: keys[keyDnb],
+      versions: ['v1']
    }
 ]
 
 const cmpelk = 0;
+const cmptcs = 1;
 
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
@@ -537,10 +545,6 @@ class AuthToken extends EvntEmit {
    }
 }
 
-// Global variables holding the authorization tokens
-let dplAuthToken; setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl])}, 2500);
-let d2oAuthToken; setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
-
 //Validate the key associated with the data product
 function iniKey(sKey) {
    switch(this._product.key) {
@@ -572,8 +576,9 @@ function iniVersionID(sVersionID) {
    //Default product version
    switch(this._product.prodID) {
       case products[cmpelk].prodID:
+      case products[cmptcs].prodID:
          if(sVersionID) {
-            if(products[cmpelk].versions.indexOf(sVersionID) === -1) {
+            if(this._product.versions.indexOf(sVersionID) === -1) {
                throw new Error('Product version specified is not valid');
             }
             else {
@@ -581,7 +586,7 @@ function iniVersionID(sVersionID) {
             }
          }
          else { //Default value is the most recent version
-            return products[cmpelk].versions[products[cmpelk].versions.length - 1];
+            return this._product.versions[this._product.versions.length - 1];
          }
       default:
          return sVersionID;
@@ -812,9 +817,17 @@ class DataProduct extends EvntEmit {
    }
 }
 
+// Global variables holding the authorization tokens
+let dplAuthToken; setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl])}, 2500);
+let d2oAuthToken; setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
+
 module.exports = {
    getCmpelk: (DUNS, forceNew, versionID) => {
       return new DataProduct(DUNS, products[cmpelk].prodID, forceNew, versionID);
+   },
+
+   getCmptcs: (DUNS, forceNew, versionID) => {
+      return new DataProduct(DUNS, products[cmptcs].prodID, forceNew, versionID);
    }
 }
- 
+
