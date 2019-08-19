@@ -80,8 +80,8 @@ CREATE TABLE public.products_dnb (
     cmpelk_obtained_at bigint,
     cmptcs JSONB,
     cmptcs_obtained_at bigint,
---    CMP_VRF_ID JSONB,
---    CMP_VRF_ID_obtained_at bigint,
+    CMP_VRF_ID JSONB,
+    CMP_VRF_ID_obtained_at bigint,
 --    CMP_BOS JSONB,
 --    CMP_BOS_obtained_at bigint,
     CONSTRAINT products_dnb_pkey PRIMARY KEY (duns)

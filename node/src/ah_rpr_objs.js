@@ -52,11 +52,19 @@ const products = [
       provider: providers[prvdrDnb],
       key: keys[keyDnb],
       versions: ['v1']
+   },
+
+   {  prodID: 'CMP_VRF_ID',
+      api: apis[apiD2o],
+      provider: providers[prvdrDnb],
+      key: keys[keyDnb],
+      versions: ['V6.0']
    }
 ]
 
 const cmpelk = 0;
 const cmptcs = 1;
+const cmpvrfid = 2;
 
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
@@ -238,7 +246,7 @@ const apiParams = {
          getHttpAttr: function() {
             const ret = {
                host: 'direct.dnb.com',
-               path: '/' + this._versionID + '/organizations/' + this._sKey + '/products/' + this._prodID,
+               path: '/' + this._versionID + '/organizations/' + this._sKey + '/products/' + this._product.prodID,
                method: 'GET',
                headers: {
                   'Content-Type': 'application/json'
@@ -249,9 +257,9 @@ const apiParams = {
                OrderReasonCode: '6332'
             };
 
-            if(this._prodID === cmp_bos.prodID) {
-               oQryStr.OwnershipPercentage = '25';
-            }
+            //if(this._prodID === cmp_bos.prodID) {
+            //   oQryStr.OwnershipPercentage = '25';
+            //}
 
             ret.path += '?' + qryStr.stringify(oQryStr);
             ret.headers.Authorization = d2oAuthToken.toString();
@@ -574,22 +582,16 @@ function iniForceNew(bForceNew) {
 
 function iniVersionID(sVersionID) {
    //Default product version
-   switch(this._product.prodID) {
-      case products[cmpelk].prodID:
-      case products[cmptcs].prodID:
-         if(sVersionID) {
-            if(this._product.versions.indexOf(sVersionID) === -1) {
-               throw new Error('Product version specified is not valid');
-            }
-            else {
-               return sVersionID;
-            }
-         }
-         else { //Default value is the most recent version
-            return this._product.versions[this._product.versions.length - 1];
-         }
-      default:
+   if(sVersionID) {
+      if(this._product.versions.indexOf(sVersionID) === -1) {
+         throw new Error('Product version specified is not valid');
+      }
+      else {
          return sVersionID;
+      }
+   }
+   else { //Default value is the most recent version
+      return this._product.versions[this._product.versions.length - 1];
    }
 }
 
@@ -719,7 +721,7 @@ class DataProduct extends EvntEmit {
       //product available or product available on the database.
       getDataProductDB.call(this)
          .then(rowCount => {
-            console.log('Retrieved ' + rowCount + ' row(s) for sKey ' + this._sKey);
+            console.log('Retrieved ' + rowCount + ' row(s) for API ' + this._product.api + ', key ' + this._sKey);
 
             //Please note that the row count can be zero becase (1) the forceNew
             //parameter was set to true or (2) the database does not contain the
@@ -748,7 +750,7 @@ class DataProduct extends EvntEmit {
             //is emitted, then the new product is stored on the database. When
             //storing new products old products are automatically archived.
             if(productAPI) {
-               console.log('About to emit onLoad for ' + this._sKey + ' (obtained online)');
+               console.log('About to emit onLoad for API ' + this._product.api + ',  key' + this._sKey + ' (obtained online)');
                emitConstructorEvnt(this, 'onLoad');
 
                DataProductToDB.call(this);
@@ -828,6 +830,10 @@ module.exports = {
 
    getCmptcs: (DUNS, forceNew, versionID) => {
       return new DataProduct(DUNS, products[cmptcs].prodID, forceNew, versionID);
+   },
+
+   getCmpvrfid: (DUNS, forceNew, versionID) => {
+      return new DataProduct(DUNS, products[cmpvrfid].prodID, forceNew, versionID);
    }
 }
 
