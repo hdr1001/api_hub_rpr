@@ -42,7 +42,7 @@ const path = require('path');
 //HTTP host server and port
 const http_host = '0.0.0.0'
 const http_port = 8081;
- 
+
 //Return application information when the top resource is requested
 app.get('/hub', (req, res) => {
    const ret = {
@@ -58,16 +58,33 @@ app.get('/hub', (req, res) => {
 
 //Return the cmpelk product for a particular DUNS
 app.get('/hub/cmpelk/:sDUNS', (req, res) => {
-   const oDUNS = api.getCmpelk(req.params.sDUNS, req.query.forceNew);
+   let oDUNS;
+
+   try {
+      oDUNS = api.getCmpelk(req.params.sDUNS, req.query.forceNew);
+   }
+   catch(err) {
+      err.api_hub_err.req_path = req.path; //Add resource information to the API hub error
+
+      res.setHeader('Content-Type', 'application/json');
+      res.status(err.api_hub_err.http_status).send(JSON.stringify(err.api_hub_err, null, 3));
+
+      return;
+   }
 
    oDUNS.on('onLoad', () => {
       res.setHeader('Content-Type', 'application/json');
       res.send(oDUNS.rsltJSON);
    });
 
-   oDUNS.on('onError', () => {
+   oDUNS.on('onError', (err) => {
       res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
+      if(err) {
+         if(err.http_status === 400) {
+            res.setHeader('Status-Code', err.http_status);
+         }
+      }
+      res.send(JSON.stringify(err, null, 3));
    });
 });
 
@@ -100,10 +117,10 @@ app.get('/hub/cmpvrfid/:sDUNS', (req, res) => {
       res.send(oDUNS.rsltJSON);
    });
 });
-/*
+
 //Return the cmp_bos product for a particular DUNS
-app.get('/api/cmpbos/:sDUNS', (req, res) => {
-   const oDUNS = api.getCmpBos(req.params.sDUNS, req.query.forceNew);
+app.get('/hub/cmpbos/:sDUNS', (req, res) => {
+   const oDUNS = api.getCmpbos(req.params.sDUNS, req.query.forceNew);
 
    oDUNS.on('onLoad', () => {
       res.setHeader('Content-Type', 'application/json');
@@ -116,7 +133,7 @@ app.get('/api/cmpbos/:sDUNS', (req, res) => {
    });
 });
 
-
+/*
 //Return a Direct+ identity resolution response (note post!)
 app.post('/api/idr', (req, res) => {
    const oIDR = api.getIDR(req.body);
@@ -182,6 +199,21 @@ app.get('/api/auto-complete.min.js', (req, res) => {
    res.sendFile(path.join(__dirname, 'static', 'auto-complete.min.js'));
 });
 */
+
+app.use((req, res, next) => {
+   let httpStatus = 404; //Not found
+   let err = new Error('Unable to locate the requested resource');
+
+   err.api_hub_err = {
+      message: 'Unable to locate the requested resource',
+      req_path: req.path,
+      http_status: httpStatus
+   };
+
+   res.setHeader('Content-Type', 'application/json'); 
+   res.status(httpStatus).send(JSON.stringify(err.api_hub_err, null, 3));
+});
+
 //Instantiate the HTTP server object
 const server = app.listen(http_port, http_host, () => {
    const host = server.address().address;

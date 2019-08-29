@@ -59,20 +59,28 @@ const products = [
       provider: providers[prvdrDnb],
       key: keys[keyDnb],
       versions: ['V6.0']
+   },
+
+   {  prodID: 'CMP_BOS',
+      api: apis[apiD2o],
+      provider: providers[prvdrDnb],
+      key: keys[keyDnb],
+      versions: ['V6.0']
    }
 ]
 
 const cmpelk = 0;
 const cmptcs = 1;
 const cmpvrfid = 2;
+const cmpbos = 3;
 
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
 
 //Event in constructor workaround, more visit https://goo.gl/KO547I
-const emitConstructorEvnt = (instanceThis, sEvnt) => {
+const emitConstructorEvnt = (instanceThis, sEvnt, err) => {
    EvntEmit.call(instanceThis);
-   setImmediate(() => {instanceThis.emit(sEvnt)});
+   setImmediate(() => {instanceThis.emit(sEvnt, err)});
 };
 
 //Libraries for REST API invocation
@@ -257,9 +265,9 @@ const apiParams = {
                OrderReasonCode: '6332'
             };
 
-            //if(this._prodID === cmp_bos.prodID) {
-            //   oQryStr.OwnershipPercentage = '25';
-            //}
+            if(this._product.prodID === products[cmpbos].prodID) {
+               oQryStr.OwnershipPercentage = '25';
+            }
 
             ret.path += '?' + qryStr.stringify(oQryStr);
             ret.headers.Authorization = d2oAuthToken.toString();
@@ -271,11 +279,24 @@ const apiParams = {
 };
 
 //Generic functions
+const ahErr = obj_ahErr => {
+   let err = new Error(obj_ahErr.message);
+   err.api_hub_err = obj_ahErr;
+
+   return err;
+}
+
 const iniApi = api => {
    api = api || apis[apiDpl];
 
    if(apis.indexOf(api) === -1) {
-      throw new Error('API specified is not valid');
+      let msg = 'API specified (' + api + ') is not supported';
+      console.log(msg);
+ 
+      throw ahErr({
+         message: msg,
+         http_status: 400
+      });
    }
 
    return api;
@@ -288,8 +309,13 @@ const iniProd = prodID => {
       return products.find(oProd => oProd.prodID === prodID);
    }
    catch(err) {
-      console.log('Product ID ' + prodID + ' is not valid');
-      throw err;
+      let msg = 'Product identifier specified (' + prodID + ') is not supported';
+      console.log(msg);
+ 
+      throw ahErr({
+         message: msg,
+         http_status: 400
+      });
    }
 };
 
@@ -557,8 +583,20 @@ class AuthToken extends EvntEmit {
 function iniKey(sKey) {
    switch(this._product.key) {
       case keys[keyDnb]: // i.e. DUNS
-         //Remove dashes from sKey submitted and, if shorter than 9 characters, prepend 0's
+         //Remove dashes from the DUNS submitted and,
          sKey = sKey.replace(/-/g, '');
+         //After the removal of the dashes the DUNS should only contain numeric characters
+         let regExp = /^\d+$/;
+         if(!regExp.test(sKey)) {
+            let msg = 'DUNS submitted (' + sKey + ') contains non-numeric characters and is therefore invalid';
+            console.log(msg);
+ 
+            throw ahErr({
+               message: msg,
+               http_status: 400
+            });
+         }
+         //Prepend 0's in case the DUNS is shorter than 9 characters,
          if(sKey.length < 9) {
             return '000000000'.substring(0, 9 - sKey.length).concat(sKey);
          }
@@ -584,7 +622,13 @@ function iniVersionID(sVersionID) {
    //Default product version
    if(sVersionID) {
       if(this._product.versions.indexOf(sVersionID) === -1) {
-         throw new Error('Product version specified is not valid');
+         let msg = 'Version identifier specified (' + sVersionID + ') is not supported';
+         console.log(msg);
+ 
+         throw ahErr({
+            message: msg,
+            http_status: 400
+         });
       }
       else {
          return sVersionID;
@@ -702,7 +746,10 @@ class DataProduct extends EvntEmit {
    constructor(sKey, prodID, forceNew, versionID) {
       super(); //Call necessary to resolve the currect execution context (this) in the extended class
 
-      //Private object properties
+      //Initialization of the private object properties. Please note that the
+      //functions used to initialize object instance properties can, under
+      //specific conditions, throw errors. It's therefore advised to implement
+      //a try-catch block when instantiating a DataProduct.
       this._product = iniProd(prodID);                      //Product object has prodID, provider, api & key properties
       this._sKey = iniKey.call(this, sKey);                 //The key with which the data product is associated
       this._forceNew = iniForceNew(forceNew);               //If true the product will retrieved online not from the database
@@ -821,7 +868,7 @@ class DataProduct extends EvntEmit {
 
 // Global variables holding the authorization tokens
 let dplAuthToken; setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl])}, 2500);
-let d2oAuthToken; setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
+//let d2oAuthToken; setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
 
 module.exports = {
    getCmpelk: (DUNS, forceNew, versionID) => {
@@ -834,6 +881,10 @@ module.exports = {
 
    getCmpvrfid: (DUNS, forceNew, versionID) => {
       return new DataProduct(DUNS, products[cmpvrfid].prodID, forceNew, versionID);
+   },
+
+   getCmpbos: (DUNS, forceNew, versionID) => {
+      return new DataProduct(DUNS, products[cmpbos].prodID, forceNew, versionID);
    }
 }
 
