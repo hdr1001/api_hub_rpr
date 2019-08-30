@@ -145,7 +145,7 @@ const sqlPrepStmts = {
       return {
          name: 'ins_' + this._product.prodID,
          text: sSQL,
-         values: [this._sKey, this._rawRsltProduct.replace(/'/g, "''"), this._obtainedAt]
+         values: [this._sKey, this._rawRsltProduct, this._obtainedAt]
       };
    },
               
