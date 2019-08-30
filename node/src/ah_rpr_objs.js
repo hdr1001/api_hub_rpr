@@ -723,10 +723,19 @@ function getDataProductAPI() {
             this._rawRsltProduct = body.join('');
 
             if(resp.statusCode < 200 || resp.statusCode > 299) {
-               let errMsg = 'API request returned an invalid HTTP status code';
-               errMsg += ' (' + resp.statusCode + ')';
+               let apiErrMsg = JSON.parse(this._rawRsltProduct);
 
-               reject(new Error(errMsg)); return;
+               let msg = apiErrMsg.error.errorMessage;
+               console.log('API call returned an HTTP status code outside the 2XX range (error: ' + msg + ').');
+ 
+               let retErr = ahErr({
+                  message: msg,
+                  http_status: resp.statusCode
+               });
+
+               retErr.api_hub_err.api_err = apiErrMsg;
+
+               reject(retErr); return;
             }
 
             if(!/^application\/json/.test(resp.headers['content-type'])) {
@@ -804,19 +813,11 @@ class DataProduct extends EvntEmit {
             }
          })
          .catch(err => {
-            const oErr = {err_msg: err.message};
-
-            if(this._rawRsltProduct) {
-               oErr.err_api = JSON.parse(this._rawRsltProduct);
-            }
-
-            this._rawRsltProduct = JSON.stringify(oErr, null, 3);
-
-            console.log('Error occured in constructor DataProduct!');
-            console.log(this._rawRsltProduct);
+            console.log('Error occured in constructor of class DataProduct!');
+            //console.log(this._rawRsltProduct);
 
             console.log('About to emit onError for object of class DataProduct');
-            emitConstructorEvnt(this, 'onError');
+            emitConstructorEvnt(this, 'onError', err);
          });
    }
 

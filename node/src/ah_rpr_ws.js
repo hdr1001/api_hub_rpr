@@ -78,13 +78,19 @@ app.get('/hub/cmpelk/:sDUNS', (req, res) => {
    });
 
    oDUNS.on('onError', (err) => {
-      res.setHeader('Content-Type', 'application/json');
+      let httpStatus = 500; //Internal server error
+      let ret = '{"message": "Internal server error", "http_status": ' + httpStatus + '}';
+ 
       if(err) {
-         if(err.http_status === 400) {
-            res.setHeader('Status-Code', err.http_status);
-         }
+         if(err.api_hub_err) {
+            httpStatus = err.api_hub_err.http_status;
+            err.api_hub_err.req_path = req.path; //Add resource information to the API hub error
+            ret = JSON.stringify(err.api_hub_err, null, 3);
+        }
       }
-      res.send(JSON.stringify(err, null, 3));
+
+      res.setHeader('Content-Type', 'application/json');
+      res.status(httpStatus).send(ret);
    });
 });
 
@@ -127,7 +133,7 @@ app.get('/hub/cmpbos/:sDUNS', (req, res) => {
       res.send(oDUNS.rsltJSON);
    });
 
-   oDUNS.on('onError', () => {
+   oDUNS.on('onError', (err) => {
       res.setHeader('Content-Type', 'application/json');
       res.send(oDUNS.rsltJSON);
    });
