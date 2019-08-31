@@ -20,7 +20,7 @@
 --
 -- *********************************************************************
 
--- DROP TRIGGER trgr_archive_cmpelk ON public.products;
+-- DROP TRIGGER trgr_archive_cmpelk ON public.products_dnb;
 -- DROP FUNCTION public.f_archive_cmpelk();
 -- ALTER TABLE public.auth_tokens DROP CONSTRAINT auth_tokens_pkey;
 -- ALTER TABLE public.products_dnb DROP CONSTRAINT products_dnb_pkey;
@@ -43,12 +43,12 @@ CREATE SEQUENCE public.auth_tokens_id_seq
     CACHE 1;
 
 -- Create the sequence for the primary key of table archive_cmpelk
---CREATE SEQUENCE public.archive_cmpelk_id_seq
---    INCREMENT 1
---    START 1
---    MINVALUE 1
---    MAXVALUE 9223372036854775807
---    CACHE 1;
+CREATE SEQUENCE public.archive_cmpelk_id_seq
+    INCREMENT 1
+    START 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    CACHE 1;
 
 -- Create the sequence for the primary key of table id_res
 --CREATE SEQUENCE public.id_res_id_seq
@@ -92,19 +92,18 @@ WITH (
 TABLESPACE pg_default;
 
 -- Create table for archiving a cmpelk Direct+ data product
---CREATE TABLE public.archive_cmpelk
---(
---    id integer NOT NULL DEFAULT nextval('archive_cmpelk_id_seq'::regclass),
---    duns character varying(11) COLLATE pg_catalog."default",
---    product JSONB,
---    obtained_at bigint,
---    archived_at bigint,
---    CONSTRAINT archive_cmpelk_pkey PRIMARY KEY (id)
---)
---WITH (
---    OIDS = FALSE
---)
---TABLESPACE pg_default;
+CREATE TABLE public.archive_cmpelk (
+    id integer NOT NULL DEFAULT nextval('archive_cmpelk_id_seq'::regclass),
+    duns character varying(11) COLLATE pg_catalog."default",
+    product JSONB,
+    obtained_at bigint,
+    archived_at bigint,
+    CONSTRAINT archive_cmpelk_pkey PRIMARY KEY (id)
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
 
 -- Create table storing Direct+ identity resolution in & output
 --CREATE TABLE public.id_res
@@ -129,23 +128,23 @@ CREATE UNIQUE INDEX auth_tokens_api_id_desc_idx
     TABLESPACE pg_default;
 
 -- Create a function to archive a Direct+ cmpelk product
---CREATE FUNCTION public.f_archive_cmpelk()
---    RETURNS trigger
---    LANGUAGE 'plpgsql'
---AS $BODY$
---BEGIN
---    INSERT INTO archive_cmpelk(duns, product, obtained_at, archived_at)
---    VALUES (OLD.duns, OLD.cmpelk, OLD.cmpelk_obtained_at, NEW.cmpelk_obtained_at);
---    RETURN NEW;
---END;
---$BODY$;
+CREATE FUNCTION public.f_archive_cmpelk()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+AS $BODY$
+BEGIN
+    INSERT INTO archive_cmpelk(duns, product, obtained_at, archived_at)
+    VALUES (OLD.duns, OLD.cmpelk, OLD.cmpelk_obtained_at, NEW.cmpelk_obtained_at);
+    RETURN NEW;
+END;
+$BODY$;
 
 -- Create a database trigger to archive a cmpelk product on update
---CREATE TRIGGER trgr_archive_cmpelk
---    AFTER UPDATE OF cmpelk
---    ON public.products
---    FOR EACH ROW
---    EXECUTE PROCEDURE public.f_archive_cmpelk();
+CREATE TRIGGER trgr_archive_cmpelk
+    AFTER UPDATE OF cmpelk
+    ON public.products_dnb
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.f_archive_cmpelk();
 
 -- Insert a couple of default records
 INSERT INTO auth_tokens (api, token, expires_in, obtained_at) VALUES('dpl', '', 0, 946681200000);
