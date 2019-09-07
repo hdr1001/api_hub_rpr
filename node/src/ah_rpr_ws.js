@@ -24,7 +24,8 @@
 // *********************************************************************
 'use strict';
 
-//Initialize the hub's foundational objects
+//Initialize the hub's error handling code & foundational objects
+const ahErr = require('./ah_rpr_err.js');
 const api = require('./ah_rpr_objs.js');
 
 //Use the express library for the web services infrastructure
@@ -43,6 +44,25 @@ const path = require('path');
 const http_host = '0.0.0.0'
 const http_port = 8081;
 
+//Return JSON data in response to an HTTP request
+const sendJSON = (req, res, sJSON, err) => {
+   let httpStatus = ahErr.httpStatusOK;
+
+   if(err) {
+      //Make sure the error is returned with the correct HTTP status code
+      httpStatus = ahErr.getHttpStatusCode(err);
+
+      //Add the requested path to the API hub error object
+      if(err.api_hub_err && req.path) err.api_hub_err.ws_path = req.path;
+
+      //Prepare the body of the error response
+      sJSON = JSON.stringify(err, null, 3);
+   }
+
+   res.setHeader('Content-Type', 'application/json'); 
+   res.status(httpStatus).send(sJSON);
+}
+
 //Return application information when the top resource is requested
 app.get('/hub', (req, res) => {
    const ret = {
@@ -52,8 +72,7 @@ app.get('/hub', (req, res) => {
       copyright: 'Hans de Rooij, 2019'
    };
 
-   res.setHeader('Content-Type', 'application/json');
-   res.send(JSON.stringify(ret, null, 3));
+   sendJSON(req, res, JSON.stringify(ret, null, 3));
 });
 
 //Return the cmpelk product for a particular DUNS
@@ -64,34 +83,12 @@ app.get('/hub/cmpelk/:sDUNS', (req, res) => {
       oDUNS = api.getCmpelk(req.params.sDUNS, req.query.forceNew);
    }
    catch(err) {
-      err.api_hub_err.req_path = req.path; //Add resource information to the API hub error
-
-      res.setHeader('Content-Type', 'application/json');
-      res.status(err.api_hub_err.http_status).send(JSON.stringify(err.api_hub_err, null, 3));
-
+      sendJSON(req, res, null, err);
       return;
    }
 
-   oDUNS.on('onLoad', () => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
-   });
-
-   oDUNS.on('onError', (err) => {
-      let httpStatus = 500; //Internal server error
-      let ret = '{"message": "Internal server error", "http_status": ' + httpStatus + '}';
- 
-      if(err) {
-         if(err.api_hub_err) {
-            httpStatus = err.api_hub_err.http_status;
-            err.api_hub_err.req_path = req.path; //Add resource information to the API hub error
-            ret = JSON.stringify(err.api_hub_err, null, 3);
-        }
-      }
-
-      res.setHeader('Content-Type', 'application/json');
-      res.status(httpStatus).send(ret);
-   });
+   oDUNS.on('onLoad', () => sendJSON(req, res, oDUNS.rsltJSON));
+   oDUNS.on('onError', err => sendJSON(req, res, null, err));
 });
 
 //Return the cmptcs product for a particular DUNS
@@ -206,18 +203,14 @@ app.get('/api/auto-complete.min.js', (req, res) => {
 });
 */
 
+//Backstop for requests for nonexistent resources
 app.use((req, res, next) => {
-   let httpStatus = 404; //Not found
-   let err = new Error('Unable to locate the requested resource');
+   let msgInfo = 'The requested resource (' + req.path + ') can not be located';
+   console.log(msgInfo);
 
-   err.api_hub_err = {
-      message: 'Unable to locate the requested resource',
-      req_path: req.path,
-      http_status: httpStatus
-   };
+   let err = ahErr.factory(ahErr.unableToLocate, msgInfo);
 
-   res.setHeader('Content-Type', 'application/json'); 
-   res.status(httpStatus).send(JSON.stringify(err.api_hub_err, null, 3));
+   sendJSON(req, res, null, err);
 });
 
 //Instantiate the HTTP server object

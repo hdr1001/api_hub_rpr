@@ -22,6 +22,9 @@
 // *********************************************************************
 'use strict';
 
+//Include the project's error handling code
+const ahErr = require('./ah_rpr_err.js');
+
 //Supported APIs
 const apis = ['dpl', 'd2o'];
 
@@ -279,24 +282,14 @@ const apiParams = {
 };
 
 //Generic functions
-const ahErr = obj_ahErr => {
-   let err = new Error(obj_ahErr.message);
-   err.api_hub_err = obj_ahErr;
-
-   return err;
-}
-
 const iniApi = api => {
    api = api || apis[apiDpl];
 
    if(apis.indexOf(api) === -1) {
-      let msg = 'API specified (' + api + ') is not supported';
-      console.log(msg);
+      let msgInfo = 'API specified (' + api + ') is not supported';
+      console.log(msgInfo);
  
-      throw ahErr({
-         message: msg,
-         http_status: 400
-      });
+      throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
    }
 
    return api;
@@ -305,17 +298,17 @@ const iniApi = api => {
 const iniProd = prodID => {
    prodID = prodID || products[cmpelk].prodID;
 
-   try {
-      return products.find(oProd => oProd.prodID === prodID);
+   let oProduct = products.find(oProd => oProd.prodID === prodID);
+
+   if(oProduct) {
+      //console.log('Successfully verified product identifier: ' + prodID);
+      return oProduct;
    }
-   catch(err) {
-      let msg = 'Product identifier specified (' + prodID + ') is not supported';
-      console.log(msg);
+   else {
+      let msgInfo = 'Product identifier specified (' + prodID + ') is not supported';
+      console.log(msgInfo);
  
-      throw ahErr({
-         message: msg,
-         http_status: 400
-      });
+      throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
    }
 };
 
@@ -588,13 +581,11 @@ function iniKey(sKey) {
          //After the removal of the dashes the DUNS should only contain numeric characters
          let regExp = /^\d+$/;
          if(!regExp.test(sKey)) {
-            let msg = 'DUNS submitted (' + sKey + ') contains non-numeric characters and is therefore invalid';
-            console.log(msg);
- 
-            throw ahErr({
-               message: msg,
-               http_status: 400
-            });
+            let msgInfo = 'DUNS submitted (' + sKey + ') contains ';
+            msgInfo += 'non-numeric characters and is therefore invalid';
+            console.log(msgInfo);
+
+            throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
          }
          //Prepend 0's in case the DUNS is shorter than 9 characters,
          if(sKey.length < 9) {
@@ -622,13 +613,10 @@ function iniVersionID(sVersionID) {
    //Default product version
    if(sVersionID) {
       if(this._product.versions.indexOf(sVersionID) === -1) {
-         let msg = 'Version identifier specified (' + sVersionID + ') is not supported';
-         console.log(msg);
- 
-         throw ahErr({
-            message: msg,
-            http_status: 400
-         });
+         let msgInfo = 'Version identifier specified (' + sVersionID + ') is not supported';
+         console.log(msgInfo);
+
+         throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
       }
       else {
          return sVersionID;
@@ -723,19 +711,10 @@ function getDataProductAPI() {
             this._rawRsltProduct = body.join('');
 
             if(resp.statusCode < 200 || resp.statusCode > 299) {
-               let apiErrMsg = JSON.parse(this._rawRsltProduct);
+               let msgInfo = 'API call returned an HTTP status code outside the 2XX range (code: ' + resp.statusCode + ').';
+               console.log(msgInfo);
 
-               let msg = apiErrMsg.error.errorMessage;
-               console.log('API call returned an HTTP status code outside the 2XX range (error: ' + msg + ').');
- 
-               let retErr = ahErr({
-                  message: msg,
-                  http_status: resp.statusCode
-               });
-
-               retErr.api_hub_err.api_err = apiErrMsg;
-
-               reject(retErr); return;
+               reject(ahErr.factory(ahErr.httpStatusExtApi, msgInfo, resp.statusCode, this._rawRsltProduct)); return;
             }
 
             if(!/^application\/json/.test(resp.headers['content-type'])) {
@@ -806,7 +785,7 @@ class DataProduct extends EvntEmit {
             //is emitted, then the new product is stored on the database. When
             //storing new products old products are automatically archived.
             if(productAPI) {
-               console.log('About to emit onLoad for API ' + this._product.api + ',  key' + this._sKey + ' (obtained online)');
+               console.log('About to emit onLoad for API ' + this._product.api + ', key ' + this._sKey + ' (obtained online)');
                emitConstructorEvnt(this, 'onLoad');
 
                DataProductToDB.call(this);
