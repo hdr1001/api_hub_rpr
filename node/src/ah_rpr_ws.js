@@ -75,65 +75,22 @@ app.get('/hub', (req, res) => {
    sendJSON(req, res, JSON.stringify(ret, null, 3));
 });
 
-//Return the cmpelk product for a particular DUNS
-app.get('/hub/cmpelk/:sDUNS', (req, res) => {
-   let oDUNS;
+//Return a data product for a particular access key
+app.get('/hub/:sProduct/:sKey', (req, res) => {
+   let oDataProd;
+
+   console.log('Product requested: ' + req.params.sProduct);
 
    try {
-      oDUNS = api.getCmpelk(req.params.sDUNS, req.query.forceNew);
+      oDataProd = api.getDataProduct(req.params.sKey, req.params.sProduct, req.query.forceNew);
    }
    catch(err) {
       sendJSON(req, res, null, err);
       return;
    }
 
-   oDUNS.on('onLoad', () => sendJSON(req, res, oDUNS.rsltJSON));
-   oDUNS.on('onError', err => sendJSON(req, res, null, err));
-});
-
-//Return the cmptcs product for a particular DUNS
-app.get('/hub/cmptcs/:sDUNS', (req, res) => {
-   const oDUNS = api.getCmptcs(req.params.sDUNS, req.query.forceNew);
-
-   oDUNS.on('onLoad', () => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
-   });
-
-   oDUNS.on('onError', () => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
-   });
-});
-
-//Return the cmp_vrf_id product for a particular DUNS
-app.get('/hub/cmpvrfid/:sDUNS', (req, res) => {
-   const oDUNS = api.getCmpvrfid(req.params.sDUNS, req.query.forceNew);
-
-   oDUNS.on('onLoad', () => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
-   });
-
-   oDUNS.on('onError', () => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
-   });
-});
-
-//Return the cmp_bos product for a particular DUNS
-app.get('/hub/cmpbos/:sDUNS', (req, res) => {
-   const oDUNS = api.getCmpbos(req.params.sDUNS, req.query.forceNew);
-
-   oDUNS.on('onLoad', () => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
-   });
-
-   oDUNS.on('onError', (err) => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(oDUNS.rsltJSON);
-   });
+   oDataProd.on('onLoad', () => sendJSON(req, res, oDataProd.rsltJSON));
+   oDataProd.on('onError', err => sendJSON(req, res, null, err));
 });
 
 /*

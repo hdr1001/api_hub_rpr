@@ -851,20 +851,8 @@ let dplAuthToken; setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl])},
 //let d2oAuthToken; setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
 
 module.exports = {
-   getCmpelk: (DUNS, forceNew, versionID) => {
-      return new DataProduct(DUNS, products[cmpelk].prodID, forceNew, versionID);
-   },
-
-   getCmptcs: (DUNS, forceNew, versionID) => {
-      return new DataProduct(DUNS, products[cmptcs].prodID, forceNew, versionID);
-   },
-
-   getCmpvrfid: (DUNS, forceNew, versionID) => {
-      return new DataProduct(DUNS, products[cmpvrfid].prodID, forceNew, versionID);
-   },
-
-   getCmpbos: (DUNS, forceNew, versionID) => {
-      return new DataProduct(DUNS, products[cmpbos].prodID, forceNew, versionID);
+   getDataProduct: (key, product, forceNew, versionID) => {
+      return new DataProduct(key, product, forceNew, versionID);
    }
 }
 
