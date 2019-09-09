@@ -89,7 +89,10 @@ app.get('/hub/:sProduct/:sKey', (req, res) => {
       return;
    }
 
-   oDataProd.on('onLoad', () => sendJSON(req, res, oDataProd.rsltJSON));
+   oDataProd.on('onLoad', () => {
+      res.setHeader('X-API-Hub-Prod-DB', oDataProd.fromDB.toString());
+      sendJSON(req, res, oDataProd.rsltJSON);
+   });
    oDataProd.on('onError', err => sendJSON(req, res, null, err));
 });
 
