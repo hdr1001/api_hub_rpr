@@ -25,11 +25,22 @@
 //Include the project's error handling code
 const ahErr = require('./ah_rpr_err.js');
 
+//Structure of the data delivered
+const dataStruct = ['XML', 'JSON'];
+
+const structXML = 0;  //XML data
+const structJSON = 1; //JSON data
+
 //Supported APIs
-const apis = ['dpl', 'd2o'];
+const apis = [
+   {id: 'dpl', struct: dataStruct[structJSON]}, 
+   {id: 'd2o', struct: dataStruct[structJSON]},
+   {id: 'dit', struct: dataStruct[structXML]}
+];
 
 const apiDpl = 0; //D&B Direct+
 const apiD2o = 1; //D&B Direct 2.0 Onboard
+const apiDit = 2; //D&B Toolkit
 
 //Provider hosting the API
 const providers = ['dnb'];
@@ -69,13 +80,22 @@ const products = [
       provider: providers[prvdrDnb],
       key: keys[keyDnb],
       versions: ['V6.0']
+   },
+
+   {  prodID: 'gdp_em',
+      prodName: 'Enterprise Management',
+      api: apis[apiDit],
+      provider: providers[prvdrDnb],
+      key: keys[keyDnb],
+      versions: ['V4']
    }
-]
+];
 
 const cmpelk = 0;
 const cmptcs = 1;
 const cmpvrfid = 2;
 const cmpbos = 3;
+const gdpem = 4;
 
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
@@ -89,6 +109,10 @@ const emitConstructorEvnt = (instanceThis, sEvnt, err) => {
 //Libraries for REST API invocation
 const https = require('https');
 const qryStr = require('querystring');
+
+//Libraries for SOAP APIs
+const domParser = require('xmldom').DOMParser;
+const domSerializer = require('xmldom').XMLSerializer;
 
 //Postgresql initialization
 //Setting parseInt8 enables storing and retrieving JS dates as BIGINTs
@@ -116,9 +140,9 @@ const sqlPrepStmts = {
       //console.log('SQL insAuthToken -> ' + sSQL);
 
       return {
-         name: this._api + 'InsAuthToken',
+         name: this._api.id + 'InsAuthToken',
          text: sSQL,
-         values: [this._api, this._token, this._expiresIn, this._obtainedAt]
+         values: [this._api.id, this._token, this._expiresIn, this._obtainedAt]
       };
    },
 
@@ -130,9 +154,9 @@ const sqlPrepStmts = {
       //console.log('SQL getAuthToken -> ' + sSQL);
 
       return {
-         name: this._api + 'GetAuthToken',
+         name: this._api.id + 'GetAuthToken',
          text: sSQL,
-         values: [this._api]
+         values: [this._api.id]
       };
    },
 
@@ -168,7 +192,7 @@ const sqlPrepStmts = {
 
 //API parameters for HTTP transaction
 const apiParams = {
-   [apis[apiDpl]]: { //D&B Direct+
+   [apis[apiDpl].id]: { //D&B Direct+
       authToken: {
          getHttpAttr: function() {
             const ret = {
@@ -218,7 +242,7 @@ const apiParams = {
          }
       }
    },
-   [apis[apiD2o]]: { //D&B Direct 2.0 Onboad
+   [apis[apiD2o].id]: { //D&B Direct 2.0 Onboad
       authToken: {
          getHttpAttr: function() {
             const ret = {
@@ -278,34 +302,183 @@ const apiParams = {
             return ret;
          }
       }
+   },
+   [apis[apiDit].id]: { //D&B Data Integration Toolkit
+      dataProduct: {
+         getHttpAttr: function() {
+            const ret = {
+               host: 'toolkit-wsdl.dnb.com',
+               path: '/ws/DNB_WebServices.Providers.OrderAndInvestigations.GDP_V4:wsp_GDP_V4',
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'text/xml;charset=UTF-8',
+                  SOAPAction: 'DNB_WebServices_Providers_OrderAndInvestigations_GDP_V4_wsp_GDP_V4_Binder_ws_OtherGDPProducts'
+               }
+            };
+
+            return ret; 
+         },
+
+         getHttpPostBody: function() {
+            const dit_credentials = require('./creds/dit.json');
+
+            let sTrnUID = '';
+            for(let i = 0; i < 12; i++) {
+               sTrnUID += Math.floor(Math.random() * 16).toString(16).toUpperCase();
+            }
+
+            let ret;
+            ret =  '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" ';
+            ret +=    'xmlns:wsp="http://www.dnb.com/DNB_WebServices/Providers/OrderAndInvestigations/GDP_V4/wsp_GDP_V4">';
+            ret += '<soapenv:Header/><soapenv:Body><wsp:ws_OtherGDPProducts>';
+            ret += '<GDPRequest>';
+            ret += '   <UserId>' + dit_credentials.usrID + '</UserId>';
+            ret += '   <Password>' + dit_credentials.pwd + '</Password>';
+            ret += '   <TRNUID>' + sTrnUID + '</TRNUID>';
+            ret += '   <socCode><AppId>NodeJS HdR</AppId><AppVer>0010</AppVer></socCode>';
+            ret += '   <Orders>';
+            ret += '      <User_Language>EN</User_Language>';
+            ret += '      <DnB_DUNS_Number>' + this._sKey + '</DnB_DUNS_Number>';
+            ret += '      <Trade_Up_Indicator>Y</Trade_Up_Indicator>';
+            ret += '      <Product>' + this._product.prodName + '</Product>';
+            ret += '      <Product_Type>D</Product_Type>';
+            ret += '      <Reason_Code>1</Reason_Code>';
+            ret += '   </Orders>';
+            ret += '   <Immediate_Delivery>';
+            ret += '      <Mode>DIRECT</Mode>';
+            ret += '      <Format>XML</Format>';
+            ret += '   </Immediate_Delivery>';
+            ret += '</GDPRequest>';
+            ret += '</wsp:ws_OtherGDPProducts></soapenv:Body>';
+            ret += '</soapenv:Envelope>';
+            //console.log(ret);
+
+            return ret;
+         }
+      }
    }
 };
 
-//Generic functions
-const iniApi = api => {
-   api = api || apis[apiDpl];
+//Check if object reference points to an authorization token
+function isAuthToken(obj) {
+   return '_token' in obj;
+}
 
-   if(apis.indexOf(api) === -1) {
-      let msgInfo = 'API specified (' + api + ') is not supported';
+//Check if the data product request is HTTP POST or GET
+function isHttpPost(apiPrms) {
+   return 'getHttpPostBody' in apiPrms;
+}
+
+//Private function returning the result of the data product call as a promise
+function execHttpReqResp() {
+   let httpAttr, httpPostBody = null, prms;
+
+   if(isAuthToken(this)) { //API call for authorization token
+      prms = apiParams[this._api.id].authToken;
+
+      httpAttr = prms.getHttpAttr();
+      httpPostBody = prms.getHttpPostBody();
+   }
+   else { //Execute an HTTP data product request
+      prms = apiParams[this._product.api.id].dataProduct;
+
+      httpAttr = prms.getHttpAttr.call(this);
+
+      if(isHttpPost(prms)) {
+         httpPostBody = prms.getHttpPostBody.call(this);
+      }
+   }
+
+   return new Promise((resolve, reject) => {
+      let httpTransaction = https.request(httpAttr, resp => {
+         var body = [];
+
+         resp.on('error', err => reject(err));
+
+         resp.on('data', chunk => body.push(chunk));
+
+         resp.on('end', () => { //The data product is now available in full
+            //As a first step register when the response was available
+            this._obtainedAt = Date.now();
+            this._productDB = false;
+
+            // ... then process the raw JSON response as returned by the API
+            let respBody = body.join('');
+
+            if(resp.statusCode < 200 || resp.statusCode > 299) {
+               let msgInfo = 'API call returned an HTTP status code outside the 2XX range (code: ' + resp.statusCode + ').';
+               console.log(msgInfo);
+
+               reject(ahErr.factory(ahErr.httpStatusExtApi, msgInfo, resp.statusCode, respBody)); return;
+            }
+
+            resolve(respBody);
+         });
+      });
+
+      if(httpPostBody) {
+         if(typeof httpPostBody === 'object') {
+            httpTransaction.write(JSON.stringify(httpPostBody));
+         }
+         else {
+            httpTransaction.write(httpPostBody);
+         }
+      }
+
+      httpTransaction.end();
+   });
+}
+
+//Generic functions
+//Return an API object based on an ID like 'dpl', 'd2o', etc.
+const getAPI = sAPI => { 
+   return apis.find(oAPI => oAPI.id === sAPI); 
+};
+
+//Return a product object based on an ID like 'cmpelk', 'cmptcs', etc.
+const getProduct = sProduct => {
+   return products.find(oProd => oProd.prodID === sProduct);
+};
+
+//Return data structure of a product
+const getDataStruct = sProduct => {
+   let sDataStruct = dataStruct[structJSON]; //Default
+
+   let oProduct = getProduct(sProduct);
+
+   if(oProduct) {
+      sDataStruct = oProduct.api.struct;
+   }
+
+   return sDataStruct;
+}
+
+const iniApi = sAPI => { //Return the API object based on the ID provided
+   sAPI = sAPI || apis[apiDpl].id; //Default provided
+
+   let oAPI = getAPI(sAPI);
+
+   if(oAPI) {
+      return oAPI;
+   }
+   else { //Throw error
+      let msgInfo = 'API specified (' + sAPI + ') is not supported';
       console.log(msgInfo);
  
       throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
    }
-
-   return api;
 };
 
-const iniProd = prodID => {
-   prodID = prodID || products[cmpelk].prodID;
+const iniProd = sProductID => {
+   sProductID = sProductID || products[cmpelk].prodID; //Default provided
 
-   let oProduct = products.find(oProd => oProd.prodID === prodID);
+   let oProduct = getProduct(sProductID);
 
    if(oProduct) {
-      //console.log('Successfully verified product identifier: ' + prodID);
       return oProduct;
    }
-   else {
-      let msgInfo = 'Product identifier specified (' + prodID + ') is not supported';
+   else { //Throw error
+      let msgInfo = 'Product identifier specified (' + sProductID + ') is not supported';
       console.log(msgInfo);
  
       throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
@@ -366,59 +539,12 @@ function authTokenToDB() {
    });
 }
 
-//Function returning the result of the REST call as a promise
-function getAuthTokenAPI() {
-   const httpAttr = apiParams[this._api].authToken.getHttpAttr();
-   const httpPostBody = apiParams[this._api].authToken.getHttpPostBody();
-
-   return new Promise((resolve, reject) => {
-      const httpPost = https.request(httpAttr, resp => {
-         var body = [];
-
-         resp.on('error', err => reject(err));
-
-         resp.on('data', chunk => body.push(chunk));
-
-         resp.on('end', () => { //Token is now available
-            //As a first step register when the response was available
-            this._obtainedAt = Date.now();
-
-            // ... then process the raw JSON response as returned by the API
-            let jsonAuthToken = body.join('');
-
-            if(resp.statusCode < 200 || resp.statusCode > 299) {
-               let errMsg = 'API token request returned an invalid HTTP status code';
-               errMsg += ' (' + resp.statusCode + ')';
-
-               reject(new Error(errMsg)); return;
-            }
-
-            if(!/^application\/json/.test(resp.headers['content-type'])) {
-               let errMsg = 'Invalid content-type, expected application/json';
-
-               reject(new Error(errMsg)); return;
-            }
-
-            resolve(jsonAuthToken);
-         });
-      });
-
-      if(typeof httpPostBody === 'object') {
-         httpPost.write(JSON.stringify(httpPostBody));
-      }
-      else {
-         httpPost.write(httpPostBody);
-      }
-      httpPost.end();
-   });
-}
-
 //Process the results returned from the call to retrieve a token from the database
 function processAuthTokenDB(rowCount) {
    let bRenewToken = false;
 
    if(rowCount > 0) {
-      console.log('Token (' + this._api +  ') retrieved from database = ' + this._token.substring(0, 3) +
+      console.log('Token (' + this._api.id +  ') retrieved from database = ' + this._token.substring(0, 3) +
          ' ... ' + this._token.substring(this._token.length - 2));
 
       if(!this._token || this._token.length == 0 || this.renewAdvised) {
@@ -434,20 +560,20 @@ function processAuthTokenDB(rowCount) {
    }
 
    //bRenewToken === true, i.e get a new authorization token online
-   return getAuthTokenAPI.call(this);
+   return execHttpReqResp.call(this);
 }
 
 //Parse authorization token as delivered by the API
 function parseJsonToken(jsonToken) {
    let oToken = JSON.parse(jsonToken);
 
-   switch(this._api) {
-      case apis[apiDpl]:
+   switch(this._api.id) {
+      case apis[apiDpl].id:
          this._token = oToken.access_token;
          this._expiresIn = oToken.expiresIn;
          break;
 
-      case apis[apiD2o]:
+      case apis[apiD2o].id:
          this._token = oToken.AuthenticationDetail.Token;
          this._expiresIn = 86400; //Specified in the documentation
          break;
@@ -463,7 +589,7 @@ function parseJsonToken(jsonToken) {
 //Process the results returned from the API call to retrieve a token online
 function processAuthTokenAPI(jsonAuthToken) {
    if(jsonAuthToken) {
-      console.log('Successfully retrieved a new ' + this._api + ' authorization token online!');
+      console.log('Successfully retrieved a new ' + this._api.id + ' authorization token online!');
       parseJsonToken.call(this, jsonAuthToken); //Parse the JSON delivered & set the object properties
       emitConstructorEvnt(this, 'onLoad');
 
@@ -486,7 +612,7 @@ function processNewTokenID(tokenID) {
 
 //Error handler of primary constructor logic authorization token class
 function errHandlerAuthToken(err) {
-   console.log('Error occured in constructor of class AuthToken! Parameter api: ' + this._api);
+   console.log('Error occured in constructor of class AuthToken! Parameter api: ' + this._api.id);
    console.log(err.message);
 
    console.log('About to emit onError for object of class AuthToken');
@@ -495,10 +621,10 @@ function errHandlerAuthToken(err) {
 
 //Periodic token validity check and, if necessary, renewal
 function periodicCheckAuthToken() {
-   console.log('API ' + this._api + ' token check at ' + new Date());
+   console.log('API ' + this._api.id + ' token check at ' + new Date());
 
    if(this.renewAdvised) {
-      console.log('API ' + this._api + ' token about to expire or expired, going online');
+      console.log('API ' + this._api.id + ' token about to expire or expired, going online');
 
       getAuthTokenAPI.call(this)
          .then( jsonAuthToken => processAuthTokenAPI.call(this, jsonAuthToken) )
@@ -506,7 +632,7 @@ function periodicCheckAuthToken() {
          .catch( err => errHandlerAuthToken.call(this, err) );
    }
    else {
-      console.log('Authorization token for api ' + this._api + ' verifies okay, ' + 
+      console.log('Authorization token for api ' + this._api.id + ' verifies okay, ' + 
          this.expiresInMins + ' minutes remaining');
    }
 }
@@ -530,8 +656,8 @@ class AuthToken extends EvntEmit {
          .then( tokenID => processNewTokenID.call(this, tokenID) )
          .catch( err => errHandlerAuthToken.call(this, err) );
 
-         //Check every 30 mins whether the authorization token is up for renewal
-         setInterval( () => periodicCheckAuthToken.call(this), 1800000 );
+      //Check every 30 mins whether the authorization token is up for renewal
+      setInterval( () => periodicCheckAuthToken.call(this), 1800000 );
    }
 
    //Public object interface
@@ -540,8 +666,8 @@ class AuthToken extends EvntEmit {
          return '';
       }
       else {
-         switch(this._api) {
-            case apis[apiDpl]:
+         switch(this._api.id) {
+            case apis[apiDpl].id:
                return 'Bearer ' + this._token;
 
             default:
@@ -652,7 +778,12 @@ function getDataProductDB() {
 
                if(rslt.rowCount > 0) {
                   if(rslt.rows[0].product) {
-                     this._oRsltProduct = rslt.rows[0].product;
+                     if(this._product.api.struct === dataStruct[structXML]) {
+                         this._rawRsltProduct = rslt.rows[0].product;
+                     }
+                     else {
+                        this._oRsltProduct = rslt.rows[0].product;
+                     }
                      this._obtainedAt = rslt.rows[0].poa;
                      this._productDB = true;
 
@@ -690,43 +821,21 @@ function DataProductToDB() {
    });
 }
 
-//Private function returning the result of the data product call as a promise
-function getDataProductAPI() {
-   let httpAttr = apiParams[this._product.api].dataProduct.getHttpAttr.call(this);
+//Process the raw data product returned by the HTTP response
+function processHttpResp(respBody) {
+   if(this._product.api.id === apis[apiDit].id) {
+      //Parse the HTTP response
+      this._oRsltProduct = new domParser().parseFromString(respBody, 'text/xml');
 
-   return new Promise((resolve, reject) => {
-      https.request(httpAttr, resp => {
-         var body = [];
+      //Strip the SOAP envelope from the response
+      this._oRsltProduct = this._oRsltProduct.getElementsByTagName('DGX')[0];
 
-         resp.on('error', err => reject(err));
-
-         resp.on('data', chunk => body.push(chunk));
-
-         resp.on('end', () => { //The data product is now available in full
-            //As a first step register when the response was available
-            this._obtainedAt = Date.now();
-            this._productDB = false;
-
-            // ... then process the raw JSON response as returned by the API
-            this._rawRsltProduct = body.join('');
-
-            if(resp.statusCode < 200 || resp.statusCode > 299) {
-               let msgInfo = 'API call returned an HTTP status code outside the 2XX range (code: ' + resp.statusCode + ').';
-               console.log(msgInfo);
-
-               reject(ahErr.factory(ahErr.httpStatusExtApi, msgInfo, resp.statusCode, this._rawRsltProduct)); return;
-            }
-
-            if(!/^application\/json/.test(resp.headers['content-type'])) {
-               let errMsg = 'Invalid content-type, expected application/json';
-
-               reject(new Error(errMsg)); return;
-            }
-
-            resolve(true);
-         });
-      }).end();
-   });
+       //The stripped product will be written to the database
+      this._rawRsltProduct = new domSerializer().serializeToString(this._oRsltProduct);
+   }
+   else {
+      this._rawRsltProduct = respBody;
+   }
 }
 
 //Definition of class DataProduct to retrieve API delivered data products
@@ -756,14 +865,17 @@ class DataProduct extends EvntEmit {
       //product available or product available on the database.
       getDataProductDB.call(this)
          .then(rowCount => {
-            console.log('Retrieved ' + rowCount + ' row(s) for API ' + this._product.api + ', key ' + this._sKey);
+            let sMsg = 'Retrieved ' + rowCount + ' row(s) '; 
+            sMsg += 'for product ' + this._product.prodID + ' with ';
+            sMsg += 'key ' + this._sKey;
+            console.log(sMsg);
 
             //Please note that the row count can be zero becase (1) the forceNew
             //parameter was set to true or (2) the database does not contain the
             //sKey requested. Either way, in case the row count returned is zero
             //a new data product will be requested online.
             if(rowCount == 0) {
-               return getDataProductAPI.call(this);
+               return execHttpReqResp.call(this);
             }
             //The data product was loaded from the datatabse in function
             //getDataProductDb. Additional work is needed here but the on
@@ -774,7 +886,7 @@ class DataProduct extends EvntEmit {
 
             return false; //Data product loaded was from the database
          })
-         .then(productAPI => {
+         .then(httpRespBody => {
             //There is no need to store the product if it was retrieved from the
             //database. The parameter rawProduct will evaluate to null if this is
             //so and the body of the if clause below will not execute. For a data
@@ -784,8 +896,10 @@ class DataProduct extends EvntEmit {
             //and the body of the if clause will be processed. First the onLoad
             //is emitted, then the new product is stored on the database. When
             //storing new products old products are automatically archived.
-            if(productAPI) {
-               console.log('About to emit onLoad for API ' + this._product.api + ', key ' + this._sKey + ' (obtained online)');
+            if(httpRespBody) {
+               processHttpResp.call(this, httpRespBody);
+
+               console.log('About to emit onLoad for API ' + this._product.api.id + ', key ' + this._sKey + ' (obtained online)');
                emitConstructorEvnt(this, 'onLoad');
 
                DataProductToDB.call(this);
@@ -810,7 +924,7 @@ class DataProduct extends EvntEmit {
    }
 
    get prodID() { //The data product
-      return this._prodID;
+      return this._product.prodID;
    }
 
    get versionID() { //Version of the D&B data product
@@ -829,7 +943,12 @@ class DataProduct extends EvntEmit {
       if(this._rawRsltProduct) return this._rawRsltProduct;
 
       if(this._oRsltProduct) {
-         return this.rawRsltProduct = JSON.stringify(this._oRsltProduct);
+         if(this._product.api.struct === dataStruct[structXML]) {
+            return this._rawRsltProduct = new domSerializer().serializeToString(this._oRsltProduct)
+         }
+         else { //JSON
+            return this.rawRsltProduct = JSON.stringify(this._oRsltProduct);
+         }
       }
 
       throw new Error('Raw data product results not (yet) available');
@@ -839,7 +958,12 @@ class DataProduct extends EvntEmit {
       if(this._oRsltProduct) return this._oRsltProduct;
 
       if(this._rawRsltProduct) {
-         return this._oRsltProduct = JSON.parse(this._rawRsltProduct);
+         if(this._product.api.struct === dataStruct[structXML]) {
+            return this._oRsltProduct = new domParser().parseFromString(this._rawRsltProduct, 'text/xml');
+         }
+         else {
+            return this._oRsltProduct = JSON.parse(this._rawRsltProduct);
+         }
       }
 
       throw new Error('Data product results not (yet) available');
@@ -847,12 +971,22 @@ class DataProduct extends EvntEmit {
 }
 
 // Global variables holding the authorization tokens
-let dplAuthToken; setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl])}, 2500);
-//let d2oAuthToken; setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
+let dplAuthToken, d2oAuthToken;
+setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl].id)}, 2500);
+//setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
 
-module.exports = {
+module.exports = Object.freeze({
+   //Structure of the data delivered
+   dataStruct,
+
+   structXML,  //XML data
+   structJSON, //JSON data
+
+   //Object instantiantion exported as a function
    getDataProduct: (key, product, forceNew, versionID) => {
       return new DataProduct(key, product, forceNew, versionID);
-   }
-}
+   },
+
+   getDataStructure: getDataStruct
+});
 

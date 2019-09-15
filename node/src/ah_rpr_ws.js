@@ -63,6 +63,26 @@ const sendJSON = (req, res, sJSON, err) => {
    res.status(httpStatus).send(sJSON);
 }
 
+//Return XML data in response to an HTTP request
+const sendXML = (req, res, sXML, err) => {
+   let httpStatus = ahErr.httpStatusOK;
+
+   if(err) {
+      sXML = '<err>Error</err>';
+      //Make sure the error is returned with the correct HTTP status code
+      //httpStatus = ahErr.getHttpStatusCode(err);
+
+      //Add the requested path to the API hub error object
+      //if(err.api_hub_err && req.path) err.api_hub_err.ws_path = req.path;
+
+      //Prepare the body of the error response
+      //sJSON = JSON.stringify(err, null, 3);
+   }
+
+   res.setHeader('Content-Type', 'application/xml'); 
+   res.status(httpStatus).send(sXML);
+}
+
 //Return application information when the top resource is requested
 app.get('/hub', (req, res) => {
    const ret = {
@@ -77,23 +97,33 @@ app.get('/hub', (req, res) => {
 
 //Return a data product for a particular access key
 app.get('/hub/:sProduct/:sKey', (req, res) => {
-   let oDataProd;
+   //console.log('Product requested: ' + req.params.sProduct);
 
-   console.log('Product requested: ' + req.params.sProduct);
+   let oDataProd, doSend = sendJSON;
 
+   //Return XML if applicable
+   if(api.getDataStructure(req.params.sProduct) === api.dataStruct[api.structXML]) {
+      doSend = sendXML;
+   }
+
+   //Try to instantiate the data product object, errors might be thrown!
    try {
       oDataProd = api.getDataProduct(req.params.sKey, req.params.sProduct, req.query.forceNew);
    }
-   catch(err) {
-      sendJSON(req, res, null, err);
+   catch(err) { //Error thrown while constructing data product object
+      doSend(req, res, null, err);
       return;
    }
 
-   oDataProd.on('onLoad', () => {
+   oDataProd.on('onLoad', () => { //Data product successfully loaded
+
+      aBitOfTestCode(oDataProd);
+
       res.setHeader('X-API-Hub-Prod-DB', oDataProd.fromDB.toString());
-      sendJSON(req, res, oDataProd.rsltJSON);
+      doSend(req, res, oDataProd.rsltJSON);
    });
-   oDataProd.on('onError', err => sendJSON(req, res, null, err));
+
+   oDataProd.on('onError', err => doSend(req, res, null, err));
 });
 
 /*
@@ -181,4 +211,15 @@ const server = app.listen(http_port, http_host, () => {
    console.log('Node.js Express server started on ' + new Date());
    console.log('Web services hosted on http://' + host + ':' + port);
 });
+
+function aBitOfTestCode(oProd) {
+   if(oProd.prodID === 'cmpelk') {
+      console.log('Primary name contained in product cmpelk = ' + oProd.rsltObj.organization.primaryName);
+   }
+
+   if(oProd.prodID === 'gdp_em') {
+      let nodePrimaryName = oProd.rsltObj.getElementsByTagName('PRIM_NME')[0];
+      console.log('Primary name contained in product gdp_em = ' + nodePrimaryName.childNodes[0].nodeValue);
+   }
+}
 

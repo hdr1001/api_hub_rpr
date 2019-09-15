@@ -93,6 +93,8 @@ CREATE TABLE public.products_dnb (
     cmpelk_obtained_at bigint,
     cmptcs JSONB,
     cmptcs_obtained_at bigint,
+    gdp_em XML,
+    gdp_em_obtained_at bigint,
     CMP_VRF_ID JSONB,
     CMP_VRF_ID_obtained_at bigint,
     CMP_BOS JSONB,

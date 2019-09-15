@@ -1,5 +1,6 @@
 .env
-postgres-data/
+postgres-data*/
 apache2/SSL/*.crt
 apache2/SSL/*.key
+node/creds/*.json
 

@@ -15,7 +15,8 @@
   "license": "Apache-2.0",
   "dependencies": {
     "express": "^4.16.x",
-    "pg": "*"
+    "pg": "*",
+    "xmldom": "*"
   }
 }
 

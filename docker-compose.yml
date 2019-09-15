@@ -32,6 +32,8 @@ services:
             node_dpl_pwd: ${dpl_pwd}
             node_d2o_usr: ${d2o_usr}
             node_d2o_pwd: ${d2o_pwd}
+            node_dit_usr: ${dit_usr}
+            node_dit_pwd: ${dit_pwd}
       depends_on:
          - ah_rpr_postgres
       ports:

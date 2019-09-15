@@ -34,6 +34,10 @@ ARG node_d2o_usr
 ARG node_d2o_pwd
 RUN sed -i s/ph_d2o_usr/${node_d2o_usr}/g ./creds/d2o.json
 RUN sed -i s/ph_d2o_pwd/${node_d2o_pwd}/g ./creds/d2o.json
+ARG node_dit_usr
+ARG node_dit_pwd
+RUN sed -i s/ph_dit_usr/${node_dit_usr}/g ./creds/dit.json
+RUN sed -i s/ph_dit_pwd/${node_dit_pwd}/g ./creds/dit.json
 
 # Install app dependencies
 COPY src/package*.json ./
