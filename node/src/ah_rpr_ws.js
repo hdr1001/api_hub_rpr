@@ -24,9 +24,10 @@
 // *********************************************************************
 'use strict';
 
-//Initialize the hub's error handling code & foundational objects
-const ahErr = require('./ah_rpr_err.js');
-const api = require('./ah_rpr_objs.js');
+//Initialize the API hub modules
+const ahGlob = require('./ah_rpr_glob.js'); //Globals
+const ahErr = require('./ah_rpr_err.js'); //Error handling code
+const api = require('./ah_rpr_objs.js'); //Foundational objects
 
 //Use the express library for the web services infrastructure
 const express = require('express');
@@ -45,7 +46,8 @@ const http_host = '0.0.0.0'
 const http_port = 8081;
 
 //Return JSON data in response to an HTTP request
-const sendJSON = (req, res, sJSON, err) => {
+const doSend = (req, res, sStruct, sBody, err) => {
+   let sContentType = 'application/' + sStruct.toLowerCase();
    let httpStatus = ahErr.httpStatusOK;
 
    if(err) {
@@ -56,31 +58,17 @@ const sendJSON = (req, res, sJSON, err) => {
       if(err.api_hub_err && req.path) err.api_hub_err.ws_path = req.path;
 
       //Prepare the body of the error response
-      sJSON = JSON.stringify(err, null, 3);
+      if(err.api_hub_err) {
+         sBody = err.toString();
+      }
+      else {
+         sContentType = 'application/json';
+         sBody = JSON.stringify(err, null, 3);
+      }
    }
 
-   res.setHeader('Content-Type', 'application/json'); 
-   res.status(httpStatus).send(sJSON);
-}
-
-//Return XML data in response to an HTTP request
-const sendXML = (req, res, sXML, err) => {
-   let httpStatus = ahErr.httpStatusOK;
-
-   if(err) {
-      sXML = '<err>Error</err>';
-      //Make sure the error is returned with the correct HTTP status code
-      //httpStatus = ahErr.getHttpStatusCode(err);
-
-      //Add the requested path to the API hub error object
-      //if(err.api_hub_err && req.path) err.api_hub_err.ws_path = req.path;
-
-      //Prepare the body of the error response
-      //sJSON = JSON.stringify(err, null, 3);
-   }
-
-   res.setHeader('Content-Type', 'application/xml'); 
-   res.status(httpStatus).send(sXML);
+   res.setHeader('Content-Type', sContentType); 
+   res.status(httpStatus).send(sBody);
 }
 
 //Return application information when the top resource is requested
@@ -92,18 +80,19 @@ app.get('/hub', (req, res) => {
       copyright: 'Hans de Rooij, 2019'
    };
 
-   sendJSON(req, res, JSON.stringify(ret, null, 3));
+   res.setHeader('Content-Type', 'application/json'); 
+   res.status(ahErr.httpStatusOK).send(JSON.stringify(ret, null, 3));
 });
 
 //Return a data product for a particular access key
 app.get('/hub/:sProduct/:sKey', (req, res) => {
    //console.log('Product requested: ' + req.params.sProduct);
 
-   let oDataProd, doSend = sendJSON;
+   let oDataProd, sStruct = ahGlob.dataStruct[ahGlob.structJSON]; //JSON is default
 
    //Return XML if applicable
-   if(api.getDataStructure(req.params.sProduct) === api.dataStruct[api.structXML]) {
-      doSend = sendXML;
+   if(api.getDataStructure(req.params.sProduct) === ahGlob.dataStruct[ahGlob.structXML]) {
+      sStruct = ahGlob.dataStruct[ahGlob.structXML];
    }
 
    //Try to instantiate the data product object, errors might be thrown!
@@ -111,19 +100,16 @@ app.get('/hub/:sProduct/:sKey', (req, res) => {
       oDataProd = api.getDataProduct(req.params.sKey, req.params.sProduct, req.query.forceNew);
    }
    catch(err) { //Error thrown while constructing data product object
-      doSend(req, res, null, err);
+      doSend(req, res, sStruct, null, err);
       return;
    }
 
    oDataProd.on('onLoad', () => { //Data product successfully loaded
-
-      aBitOfTestCode(oDataProd);
-
       res.setHeader('X-API-Hub-Prod-DB', oDataProd.fromDB.toString());
-      doSend(req, res, oDataProd.rsltJSON);
+      doSend(req, res, sStruct, oDataProd.rsltJSON);
    });
 
-   oDataProd.on('onError', err => doSend(req, res, null, err));
+   oDataProd.on('onError', err => doSend(req, res, sStruct, null, err));
 });
 
 /*
@@ -195,12 +181,16 @@ app.get('/api/auto-complete.min.js', (req, res) => {
 
 //Backstop for requests for nonexistent resources
 app.use((req, res, next) => {
+   let sStruct = ahGlob.dataStruct[ahGlob.structJSON];
+
    let msgInfo = 'The requested resource (' + req.path + ') can not be located';
    console.log(msgInfo);
 
-   let err = ahErr.factory(ahErr.unableToLocate, msgInfo);
+   let err = new ahErr.ApiHubErr(ahErr.unableToLocate,
+                                 ahGlob.dataStruct[ahGlob.structJSON],
+                                 msgInfo);
 
-   sendJSON(req, res, null, err);
+   doSend(req, res, sStruct, null, err);
 });
 
 //Instantiate the HTTP server object
@@ -211,15 +201,4 @@ const server = app.listen(http_port, http_host, () => {
    console.log('Node.js Express server started on ' + new Date());
    console.log('Web services hosted on http://' + host + ':' + port);
 });
-
-function aBitOfTestCode(oProd) {
-   if(oProd.prodID === 'cmpelk') {
-      console.log('Primary name contained in product cmpelk = ' + oProd.rsltObj.organization.primaryName);
-   }
-
-   if(oProd.prodID === 'gdp_em') {
-      let nodePrimaryName = oProd.rsltObj.getElementsByTagName('PRIM_NME')[0];
-      console.log('Primary name contained in product gdp_em = ' + nodePrimaryName.childNodes[0].nodeValue);
-   }
-}
 

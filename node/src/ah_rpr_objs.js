@@ -22,20 +22,15 @@
 // *********************************************************************
 'use strict';
 
-//Include the project's error handling code
+//Include shared project code
+const ahGlob = require('./ah_rpr_glob.js');
 const ahErr = require('./ah_rpr_err.js');
-
-//Structure of the data delivered
-const dataStruct = ['XML', 'JSON'];
-
-const structXML = 0;  //XML data
-const structJSON = 1; //JSON data
 
 //Supported APIs
 const apis = [
-   {id: 'dpl', struct: dataStruct[structJSON]}, 
-   {id: 'd2o', struct: dataStruct[structJSON]},
-   {id: 'dit', struct: dataStruct[structXML]}
+   {id: 'dpl', struct: ahGlob.dataStruct[ahGlob.structJSON]}, 
+   {id: 'd2o', struct: ahGlob.dataStruct[ahGlob.structJSON]},
+   {id: 'dit', struct: ahGlob.dataStruct[ahGlob.structXML]}
 ];
 
 const apiDpl = 0; //D&B Direct+
@@ -235,6 +230,10 @@ const apiParams = {
                versionId: this._versionID
             };
 
+            if(this._product.prodID === products[cmptcs].prodID) {
+               oQryStr.orderReason = 6332;
+            }
+
             ret.path += '/' + this._sKey + '?' + qryStr.stringify(oQryStr);
             ret.headers.Authorization = dplAuthToken.toString();
 
@@ -409,7 +408,21 @@ function execHttpReqResp() {
                let msgInfo = 'API call returned an HTTP status code outside the 2XX range (code: ' + resp.statusCode + ').';
                console.log(msgInfo);
 
-               reject(ahErr.factory(ahErr.httpStatusExtApi, msgInfo, resp.statusCode, respBody)); return;
+               let sStruct = ahGlob.dataStruct[ahGlob.structJSON];
+
+               if(this._product && this._product.api.struct === ahGlob.dataStruct[ahGlob.structXML]) {
+                  //Please note that in SOAP APIs errors are usually communicated in the HTTP
+                  //response body. It is therefore unlikely to end up in this particular branch
+                  //of code but it is possible (most likely involving an HTTP status code 500).
+                  sStruct = this._product.api.struct;
+               }
+
+               reject(new ahErr.ApiHubErr( ahErr.httpStatusExtApi,   //Error type code
+                                           sStruct,                  //The structure in which the error should be passed back
+                                           msgInfo,                  //Specific information concerning the error
+                                           resp.statusCode,          //HTTP status code 
+                                           respBody));               //String (JSON or XML) containing external API error
+               return;
             }
 
             resolve(respBody);
@@ -442,7 +455,7 @@ const getProduct = sProduct => {
 
 //Return data structure of a product
 const getDataStruct = sProduct => {
-   let sDataStruct = dataStruct[structJSON]; //Default
+   let sDataStruct = ahGlob.dataStruct[ahGlob.structJSON]; //Default
 
    let oProduct = getProduct(sProduct);
 
@@ -465,7 +478,9 @@ const iniApi = sAPI => { //Return the API object based on the ID provided
       let msgInfo = 'API specified (' + sAPI + ') is not supported';
       console.log(msgInfo);
  
-      throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
+      throw new ahErr.ApiHubErr( ahErr.instantiateDataProduct,
+                                 ahGlob.dataStruct[ahGlob.structJSON],
+                                 msgInfo );
    }
 };
 
@@ -481,7 +496,9 @@ const iniProd = sProductID => {
       let msgInfo = 'Product identifier specified (' + sProductID + ') is not supported';
       console.log(msgInfo);
  
-      throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
+      throw new ahErr.ApiHubErr( ahErr.instantiateDataProduct,
+                                 ahGlob.dataStruct[ahGlob.structJSON],
+                                 msgInfo );
    }
 };
 
@@ -626,7 +643,7 @@ function periodicCheckAuthToken() {
    if(this.renewAdvised) {
       console.log('API ' + this._api.id + ' token about to expire or expired, going online');
 
-      getAuthTokenAPI.call(this)
+      execHttpReqResp.call(this)
          .then( jsonAuthToken => processAuthTokenAPI.call(this, jsonAuthToken) )
          .then( tokenID => processNewTokenID.call(this, tokenID) )
          .catch( err => errHandlerAuthToken.call(this, err) );
@@ -711,7 +728,9 @@ function iniKey(sKey) {
             msgInfo += 'non-numeric characters and is therefore invalid';
             console.log(msgInfo);
 
-            throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
+            throw new ahErr.ApiHubErr( ahErr.instantiateDataProduct,
+                                       this._product.api.struct,
+                                       msgInfo );
          }
          //Prepend 0's in case the DUNS is shorter than 9 characters,
          if(sKey.length < 9) {
@@ -742,7 +761,9 @@ function iniVersionID(sVersionID) {
          let msgInfo = 'Version identifier specified (' + sVersionID + ') is not supported';
          console.log(msgInfo);
 
-         throw ahErr.factory(ahErr.instantiateDataProduct, msgInfo);
+         throw new ahErr.ApiHubErr( ahErr.instantiateDataProduct,
+                                    this._product.api.struct,
+                                    msgInfo );
       }
       else {
          return sVersionID;
@@ -778,7 +799,7 @@ function getDataProductDB() {
 
                if(rslt.rowCount > 0) {
                   if(rslt.rows[0].product) {
-                     if(this._product.api.struct === dataStruct[structXML]) {
+                     if(this._product.api.struct === ahGlob.dataStruct[ahGlob.structXML]) {
                          this._rawRsltProduct = rslt.rows[0].product;
                      }
                      else {
@@ -830,8 +851,39 @@ function processHttpResp(respBody) {
       //Strip the SOAP envelope from the response
       this._oRsltProduct = this._oRsltProduct.getElementsByTagName('DGX')[0];
 
-       //The stripped product will be written to the database
+      //The stripped product will be written to the database
       this._rawRsltProduct = new domSerializer().serializeToString(this._oRsltProduct);
+
+      //The D&B Data Integration Toolkit is a SOAP API and therefore tends to
+      //communicate errors in the message body (where REST APIs are more likely
+      //to use HTTP status codes out of the 2XX range). This implies that, in
+      //order to implement robust error handling, the response must be checked
+      //for error codes.
+      let iStatus; //Integer value of the main status code reurned
+
+      let statusNodes = this._oRsltProduct.getElementsByTagName('STATUS');
+      let statusCodeNode = null;
+
+      for(let i = 0; i < statusNodes.length; i++) {
+         iStatus = null;
+
+         statusCodeNode = statusNodes[i].getElementsByTagName('CODE')[0];
+
+         if(statusCodeNode) {
+            iStatus = parseInt(statusCodeNode.childNodes[0].nodeValue);
+         }
+
+         if(iStatus === null || isNaN(iStatus) || iStatus != 0) {
+            let msgInfo = '<![CDATA[D&B Toolkit GDP request returned an error status code';
+            msgInfo += ' (code: ' + iStatus + ')]]>';
+
+            throw new ahErr.ApiHubErr( ahErr.httpStatusExtApi,              //Error type code
+                                       ahGlob.dataStruct[ahGlob.structXML], //The structure in which the error should be passed back
+                                       msgInfo,                             //Specific information concerning the error
+                                       null,                                //HTTP status code not available
+                                       this._rawRsltProduct);               //String (JSON or XML) containing external API error
+         }
+      }
    }
    else {
       this._rawRsltProduct = respBody;
@@ -943,7 +995,7 @@ class DataProduct extends EvntEmit {
       if(this._rawRsltProduct) return this._rawRsltProduct;
 
       if(this._oRsltProduct) {
-         if(this._product.api.struct === dataStruct[structXML]) {
+         if(this._product.api.struct === ahGlob.dataStruct[ahGlob.structXML]) {
             return this._rawRsltProduct = new domSerializer().serializeToString(this._oRsltProduct)
          }
          else { //JSON
@@ -958,7 +1010,7 @@ class DataProduct extends EvntEmit {
       if(this._oRsltProduct) return this._oRsltProduct;
 
       if(this._rawRsltProduct) {
-         if(this._product.api.struct === dataStruct[structXML]) {
+         if(this._product.api.struct === ahGlob.dataStruct[ahGlob.structXML]) {
             return this._oRsltProduct = new domParser().parseFromString(this._rawRsltProduct, 'text/xml');
          }
          else {
@@ -976,12 +1028,6 @@ setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl].id)}, 2500);
 //setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
 
 module.exports = Object.freeze({
-   //Structure of the data delivered
-   dataStruct,
-
-   structXML,  //XML data
-   structJSON, //JSON data
-
    //Object instantiantion exported as a function
    getDataProduct: (key, product, forceNew, versionID) => {
       return new DataProduct(key, product, forceNew, versionID);

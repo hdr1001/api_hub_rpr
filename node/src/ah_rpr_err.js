@@ -21,6 +21,14 @@
 // *********************************************************************
 'use strict';
 
+//Include shared project code
+const ahGlob = require('./ah_rpr_glob.js');
+
+//Libraries for SOAP APIs
+const domParser = require('xmldom').DOMParser;
+const domSerializer = require('xmldom').XMLSerializer;
+
+//API Hub errors
 const ahErrMsgs = [
    {shrtDesc: 'Error occurred in API HUB', httpStatus: 500},
    {shrtDesc: 'Error instantiating DataProduct object', httpStatus: 400},
@@ -28,36 +36,90 @@ const ahErrMsgs = [
    {shrtDesc: 'Unable to locate the requested resource', httpStatus: 404}
 ];
 
-//Factory funtion to create a generic API Hub error
-const ahErrFactory = (errIdx, msgInfo, extApiHttpStatus, extApiErrMsg) => {
-   let retErr = new Error(ahErrMsgs[errIdx].shrtDesc);
-
+//API hub error constructor function
+function ApiHubErr(errIdx, struct, msgInfo, extApiHttpStatus, extApiErrMsg) {
    //Every API hub error odject must include an error number and
    //derived error message
-   retErr.api_hub_err = {
+   this.api_hub_err = {
       message: ahErrMsgs[errIdx].shrtDesc,
-      err_num: errIdx
+      err_num: errIdx,
+      err_struct: struct
    };
 
    //More detailed information about the specific error
-   if(msgInfo) retErr.api_hub_err.msg_info = msgInfo;
+   if(msgInfo) this.api_hub_err.msg_info = msgInfo;
 
    //Error information derived from an external API can be
    //included in property ext_api
    if(extApiHttpStatus || extApiErrMsg) {
-      retErr.api_hub_err.ext_api = {};
+      this.api_hub_err.ext_api = {};
 
       if(extApiHttpStatus) {
-         retErr.api_hub_err.ext_api.http_status = extApiHttpStatus;
+         this.api_hub_err.ext_api.http_status = extApiHttpStatus;
       }
 
       if(extApiErrMsg) {
-         retErr.api_hub_err.ext_api.err_msg = JSON.parse(extApiErrMsg);
+         if(this.api_hub_err.err_struct === ahGlob.dataStruct[ahGlob.structXML]) {
+            //External API error is unparsed XML
+            let oXML = null;
+
+            try {
+               oXML = new domParser().parseFromString(extApiErrMsg, 'text/xml');
+            }
+            catch(err) {
+               console.log(err);
+            }
+
+            this.api_hub_err.ext_api.err_msg = oXML;
+         }
+         else { //External API error is unparsed JSON or string
+            try {
+               this.api_hub_err.ext_api.err_msg = JSON.parse(extApiErrMsg);
+            }
+            catch(err) {
+               this.api_hub_err.ext_api.err_msg = extApiErrMsg;
+            }
+         }
       }
    }
+}
 
-   return retErr;
-};
+ApiHubErr.prototype.toString = function() {
+   if(this.api_hub_err && this.api_hub_err.err_struct && 
+         this.api_hub_err.err_struct === ahGlob.dataStruct[ahGlob.structXML]) {
+
+      let sXML = '<api_hub_err>';
+      sXML += '<message>' + this.api_hub_err.message + '</message>';
+      sXML += '<err_num>' + this.api_hub_err.err_num + '</err_num>';
+      sXML += '<err_struct>' + this.api_hub_err.err_struct + '</err_struct>';
+
+      if(this.api_hub_err.msg_info) sXML += '<msg_info>' + this.api_hub_err.msg_info + '</msg_info>';
+
+      if(this.api_hub_err.ext_api) {
+         sXML += '<ext_api>';
+
+         if(this.api_hub_err.ext_api.http_status) {
+            sXML += '<http_status>' + this.api_hub_err.ext_api.http_status + '</http_status>';
+         }
+
+         if(this.api_hub_err.ext_api.err_msg) {
+            let sMsg = new domSerializer().serializeToString(this.api_hub_err.ext_api.err_msg);
+
+            sXML += '<err_msg>' + sMsg + '</err_msg>';
+         }
+
+         sXML += '</ext_api>';
+      }
+
+      if(this.api_hub_err.ws_path) sXML += '<ws_path>' + this.api_hub_err.ws_path + '</ws_path>';
+
+      sXML += '</api_hub_err>';
+
+      return sXML;
+   }
+
+   return JSON.stringify(this, null, 3);
+}
 
 //Get the HTTP status error code from an API hub error object
 const ahErrGetHttpStatusCode = err => {
@@ -98,7 +160,7 @@ module.exports = Object.freeze({
    unableToLocate: 3,
 
    //Error handling functions for use in applications
-   factory: ahErrFactory,
+   ApiHubErr,
    getHttpStatusCode: ahErrGetHttpStatusCode
 });
 
