@@ -1,3 +1,5 @@
+// *********************************************************************
+//
 // API Hub request, persist & respond global variables
 // JavaScript code file: ah_rpr_glob.js
 //
