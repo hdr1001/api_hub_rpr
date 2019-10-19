@@ -7,6 +7,9 @@ Supported APIs
    - Trade credit summary
 2. D&B Data Integration Toolkit (https://toolkit-api.dnb.com/)
    - Enterprise management
+3. D&B Direct 2.0 Onboard
+   - Compliance Verification Identity
+   - Compliance Beneficial Ownership Structure
 
 © 2019 Hans de Rooij
 

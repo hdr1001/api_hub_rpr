@@ -1025,7 +1025,7 @@ class DataProduct extends EvntEmit {
 // Global variables holding the authorization tokens
 let dplAuthToken, d2oAuthToken;
 setTimeout(() => {dplAuthToken = new AuthToken(apis[apiDpl].id)}, 2500);
-//setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o])}, 3000);
+setTimeout(() => {d2oAuthToken = new AuthToken(apis[apiD2o].id)}, 3000);
 
 module.exports = Object.freeze({
    //Object instantiantion exported as a function
