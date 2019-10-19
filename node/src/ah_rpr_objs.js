@@ -83,6 +83,13 @@ const products = [
       provider: providers[prvdrDnb],
       key: keys[keyDnb],
       versions: ['V4']
+   },
+
+   {  prodID: 'cmpcvf',
+      api: apis[apiDpl],
+      provider: providers[prvdrDnb],
+      key: keys[keyDnb],
+      versions: ['v1']
    }
 ];
 
@@ -91,6 +98,7 @@ const cmptcs = 1;
 const cmpvrfid = 2;
 const cmpbos = 3;
 const gdpem = 4;
+const cmpcvf = 5;
 
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
@@ -230,8 +238,16 @@ const apiParams = {
                versionId: this._versionID
             };
 
-            if(this._product.prodID === products[cmptcs].prodID) {
-               oQryStr.orderReason = 6332;
+            switch(this._product.prodID) {
+		    case products[cmptcs].prodID:
+                  oQryStr.tradeUp = 'hq';
+                  oQryStr.orderReason = 6332;
+                  break;
+		    case products[cmpcvf].prodID:
+                  oQryStr.tradeUp = 'hq';
+                  break;
+               default:
+                  console.log('No additional query parameters');
             }
 
             ret.path += '/' + this._sKey + '?' + qryStr.stringify(oQryStr);
