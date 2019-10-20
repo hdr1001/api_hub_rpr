@@ -90,15 +90,23 @@ const products = [
       provider: providers[prvdrDnb],
       key: keys[keyDnb],
       versions: ['v1']
+   },
+
+   {  prodID: 'cmpbos',
+      api: apis[apiDpl],
+      provider: providers[prvdrDnb],
+      key: keys[keyDnb],
+      versions: ['v1']
    }
 ];
 
 const cmpelk = 0;
 const cmptcs = 1;
 const cmpvrfid = 2;
-const cmpbos = 3;
+const cmp_bos_d2o = 3;
 const gdpem = 4;
 const cmpcvf = 5;
+const cmpbos = 6;
 
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
@@ -231,7 +239,7 @@ const apiParams = {
                   'Content-Type': 'application/json',
                   Origin: 'www.dnb.com'
                }
-            }
+            };
 
             const oQryStr = {
                productId: this._product.prodID,
@@ -239,18 +247,28 @@ const apiParams = {
             };
 
             switch(this._product.prodID) {
-		    case products[cmptcs].prodID:
+               case products[cmptcs].prodID:
                   oQryStr.tradeUp = 'hq';
                   oQryStr.orderReason = 6332;
                   break;
-		    case products[cmpcvf].prodID:
+               case products[cmpcvf].prodID:
+                  oQryStr.tradeUp = 'hq';
+                  break;
+               case products[cmpbos].prodID:
+                  ret.path = '/v1/beneficialowner';
+                  oQryStr.duns = this._sKey;
+                  oQryStr.ownershipType = 'BENF_OWRP';
+                  oQryStr.ownershipPercentage = '25';
                   oQryStr.tradeUp = 'hq';
                   break;
                default:
                   console.log('No additional query parameters');
             }
 
-            ret.path += '/' + this._sKey + '?' + qryStr.stringify(oQryStr);
+            if(this._product.prodID !== products[cmpbos].prodID) {
+               ret.path += '/' + this._sKey
+            }
+            ret.path += '?' + qryStr.stringify(oQryStr);
             ret.headers.Authorization = dplAuthToken.toString();
 
             return ret;
@@ -307,7 +325,7 @@ const apiParams = {
                OrderReasonCode: '6332'
             };
 
-            if(this._product.prodID === products[cmpbos].prodID) {
+            if(this._product.prodID === products[cmp_bos_d2o].prodID) {
                oQryStr.OwnershipPercentage = '25';
             }
 

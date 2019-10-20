@@ -51,12 +51,34 @@ const arrDUNS = fs.readFileSync('DUNS.txt').toString().split('\n');
 console.log('Test file contains ' + arrDUNS.length + ' records');
 
 const arrProd = [
-   {id: 'cmpelk', ms: 500, percDUNS: 100, percForce: 20},
-   {id: 'cmptcs', ms: 500, percDUNS: 100, percForce: 10},
-   {id: 'gdp_em', ms: 10000, percDUNS: 100, percForce: 0}
+   {id: 'cmpelk', ms: 500, percDUNS: 100, percForce: 0},
+   {id: 'cmptcs', ms: 500, percDUNS: 0, percForce: 0},
+   {id: 'cmpcvf', ms: 1000, percDUNS: 100, percForce: 0},
+   {id: 'cmpbos', ms: 1000, percDUNS: 100, percForce: 0},
+   {id: 'gdp_em', ms: 10000, percDUNS: 0, percForce: 0},
+   {id: 'CMP_VRF_ID', ms: 5000, percDUNS: 100, percForce: 0},
+   {id: 'CMP_BOS', ms: 5000, percDUNS: 100, percForce: 0}
 ];
 
 const arrLmtrs = [];
+
+function isContentJSON(respHdrs) {
+   try {
+      return respHdrs.content.match(/JSON/i);
+   }
+   catch(err) {
+      return false;
+   }
+}
+
+function isContentXML(respHdrs) {
+   try {
+      return respHdrs.content.match(/XML/i);
+   }
+   catch(err) {
+      return false;
+   }
+}
 
 function getAhDataProduct(sPath, forceNew) {
    //Set the product request HTTP attributes
@@ -134,20 +156,27 @@ arrProd.forEach(oProd => {
 
             let oDataProd = null;
 
-            if(httpResp.hdrs.content.match(/JSON/i)) {
+            if(isContentJSON(httpResp.hdrs)) {
                oDataProd = JSON.parse(httpResp.sBody);
 
                switch(oProd.id) {
                   case 'cmpelk':
                   case 'cmptcs':
+                  case 'cmpcvf':
+                  case 'cmpbos':
                      console.log(oDataProd.organization.primaryName +
                                     ' (' + oDataProd.transactionDetail.productID + ')');
+                     break;
+                  case 'CMP_VRF_ID':
+                  case 'CMP_BOS':
+                      console.log(oDataProd.OrderProductResponse.OrderProductResponseDetail.Product.Organization.OrganizationName.OrganizationPrimaryName[0].OrganizationName['$']  +
+                                    ' (' + oDataProd.OrderProductResponse.OrderProductResponseDetail.Product.DNBProductID + ')');
                      break;
                   default:
                      console.log('Unknown product in JSON format');
                }
             }
-            else if(httpResp.hdrs.content.match(/XML/i)) {
+            else if(isContentXML(httpResp.hdrs)) {
                oDataProd = new domParser().parseFromString(httpResp.sBody, 'text/xml');
 
                switch(oProd.id) {
@@ -163,6 +192,7 @@ arrProd.forEach(oProd => {
             }
             else {
                console.log('Unsupported content type');
+               console.log(httpResp);
             }
 
          })
@@ -171,7 +201,9 @@ arrProd.forEach(oProd => {
 
             let err, errAh;
 
-            if(httpResp.hdrs.content.match(/JSON/i)) {
+            console.log('In catch clause, ' + ahPath);
+
+            if(isContentJSON(httpResp.hdrs)) {
                err = JSON.parse(httpResp.sBody);
                errAh = err.api_hub_err;
 
@@ -182,7 +214,7 @@ arrProd.forEach(oProd => {
 
                if(errAh.msg_info) console.log(errAh.msg_info);
             }
-            else if(httpResp.hdrs.content.match(/XML/i)) {
+            else if(isContentXML(httpResp.hdrs)) {
                err = new domParser().parseFromString(httpResp.sBody, 'text/xml');
                errAh = err.getElementsByTagName('api_hub_err')[0];
 
@@ -213,6 +245,7 @@ arrProd.forEach(oProd => {
             }
             else {
                console.log('Unsupported content type');
+               console.log(httpResp);
             }
 
          })

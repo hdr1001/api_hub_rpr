@@ -26,22 +26,27 @@
 -- DROP FUNCTION public.f_archive_cmptcs();
 -- DROP TRIGGER trgr_archive_cmpcvf ON public.products_dnb;
 -- DROP FUNCTION public.f_archive_cmpcvf();
+-- DROP TRIGGER trgr_archive_cmpbos ON public.products_dnb;
+-- DROP FUNCTION public.f_archive_cmpbos();
 -- ALTER TABLE public.auth_tokens DROP CONSTRAINT auth_tokens_pkey;
 -- ALTER TABLE public.products_dnb DROP CONSTRAINT products_dnb_pkey;
 -- ALTER TABLE public.archive_cmpelk DROP CONSTRAINT archive_cmpelk_pkey;
 -- ALTER TABLE public.archive_cmptcs DROP CONSTRAINT archive_cmptcs_pkey;
 -- ALTER TABLE public.archive_cmpcvf DROP CONSTRAINT archive_cmpcvf_pkey;
+-- ALTER TABLE public.archive_cmpbos DROP CONSTRAINT archive_cmpbos_pkey;
 -- DROP INDEX public.auth_tokens_api_id_desc_idx;
 -- DROP TABLE public.auth_tokens;
 -- DROP TABLE public.products_dnb;
 -- DROP TABLE public.archive_cmpelk;
 -- DROP TABLE public.archive_cmptcs;
 -- DROP TABLE public.archive_cmpcvf;
+-- DROP TABLE public.archive_cmpbos;
 -- DROP TABLE public.id_res;
 -- DROP SEQUENCE public.auth_tokens_id_seq;
 -- DROP SEQUENCE public.archive_cmpelk_id_seq;
 -- DROP SEQUENCE public.archive_cmptcs_id_seq;
 -- DROP SEQUENCE public.archive_cmpcvf_id_seq;
+-- DROP SEQUENCE public.archive_cmpbos_id_seq;
 -- DROP SEQUENCE public.id_res_id_seq;
 
 -- Create the sequence for the primary key of table auth_tokens
@@ -68,8 +73,16 @@ CREATE SEQUENCE public.archive_cmptcs_id_seq
     MAXVALUE 9223372036854775807
     CACHE 1;
 
--- Create the sequence for the primary key of table archive_cmpelk
+-- Create the sequence for the primary key of table archive_cmpcvf
 CREATE SEQUENCE public.archive_cmpcvf_id_seq
+    INCREMENT 1
+    START 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    CACHE 1;
+
+-- Create the sequence for the primary key of table archive_cmpbos
+CREATE SEQUENCE public.archive_cmpbos_id_seq
     INCREMENT 1
     START 1
     MINVALUE 1
@@ -114,6 +127,8 @@ CREATE TABLE public.products_dnb (
     CMP_BOS_obtained_at bigint,
     cmpcvf JSONB,
     cmpcvf_obtained_at bigint,
+    cmpbos JSONB,
+    cmpbos_obtained_at bigint,
     CONSTRAINT products_dnb_pkey PRIMARY KEY (duns)
 )
 WITH (
@@ -157,6 +172,20 @@ CREATE TABLE public.archive_cmpcvf (
     obtained_at bigint,
     archived_at bigint,
     CONSTRAINT archive_cmpcvf_pkey PRIMARY KEY (id)
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+-- Create table for archiving a cmpbos Direct+ data product
+CREATE TABLE public.archive_cmpbos (
+    id integer NOT NULL DEFAULT nextval('archive_cmpbos_id_seq'::regclass),
+    duns character varying(11) COLLATE pg_catalog."default",
+    product JSONB,
+    obtained_at bigint,
+    archived_at bigint,
+    CONSTRAINT archive_cmpbos_pkey PRIMARY KEY (id)
 )
 WITH (
     OIDS = FALSE
@@ -235,12 +264,31 @@ BEGIN
 END;
 $BODY$;
 
--- Create a database trigger to archive a cmptcs product on update
+-- Create a database trigger to archive a cmpcvf product on update
 CREATE TRIGGER trgr_archive_cmpcvf
     AFTER UPDATE OF cmpcvf
     ON public.products_dnb
     FOR EACH ROW
     EXECUTE PROCEDURE public.f_archive_cmpcvf();
+
+-- Create a function to archive a Direct+ cmpbos product
+CREATE FUNCTION public.f_archive_cmpbos()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+AS $BODY$
+BEGIN
+    INSERT INTO archive_cmpbos(duns, product, obtained_at, archived_at)
+    VALUES (OLD.duns, OLD.cmpbos, OLD.cmpbos_obtained_at, NEW.cmpbos_obtained_at);
+    RETURN NEW;
+END;
+$BODY$;
+
+-- Create a database trigger to archive a cmpbos product on update
+CREATE TRIGGER trgr_archive_cmpbos
+    AFTER UPDATE OF cmpbos
+    ON public.products_dnb
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.f_archive_cmpbos();
 
 -- Insert a couple of default records
 INSERT INTO auth_tokens (api, token, expires_in, obtained_at) VALUES('dpl', '', 0, 946681200000);
