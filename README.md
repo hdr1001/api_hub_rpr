@@ -6,6 +6,7 @@ Supported APIs
    - Company profile, linkage and executives
    - Trade credit summary
    - Company profile, compliance verification
+   - Compliance beneficial ownership structure
 2. D&B Data Integration Toolkit (https://toolkit-api.dnb.com/)
    - Enterprise management
 3. D&B Direct 2.0 Onboard (https://docs.dnb.com/direct/2.0/en-US/onboard-rest-API)
