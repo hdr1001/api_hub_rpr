@@ -42,7 +42,7 @@ const app = express();
 const path = require('path');
 
 //HTTP host server and port
-const http_host = '0.0.0.0'
+const http_host = '0.0.0.0';
 const http_port = 8081;
 
 //Return JSON data in response to an HTTP request
@@ -69,7 +69,7 @@ const doSend = (req, res, sStruct, sBody, err) => {
 
    res.setHeader('Content-Type', sContentType); 
    res.status(httpStatus).send(sBody);
-}
+};
 
 //Return application information when the top resource is requested
 app.get('/hub', (req, res) => {
@@ -106,7 +106,7 @@ app.get('/hub/:sProduct/:sKey', (req, res) => {
 
    oDataProd.on('onLoad', () => { //Data product successfully loaded
       res.setHeader('X-API-Hub-Prod-DB', oDataProd.fromDB.toString());
-      doSend(req, res, sStruct, oDataProd.rsltJSON);
+      doSend(req, res, sStruct, oDataProd.rsltTxt);
    });
 
    oDataProd.on('onError', err => doSend(req, res, sStruct, null, err));

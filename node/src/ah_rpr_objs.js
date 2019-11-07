@@ -266,7 +266,7 @@ const apiParams = {
             }
 
             if(this._product.prodID !== products[cmpbos].prodID) {
-               ret.path += '/' + this._sKey
+               ret.path += '/' + this._sKey;
             }
             ret.path += '?' + qryStr.stringify(oQryStr);
             ret.headers.Authorization = dplAuthToken.toString();
@@ -297,7 +297,7 @@ const apiParams = {
          getHttpPostBody: function() {
             const ret = {
                TransactionDetail: {
-                  ApplicationTransactionID: 'Node.js object code',
+                  ApplicationTransactionID: 'Node.js object code'
                }
             };
 
@@ -392,11 +392,6 @@ const apiParams = {
    }
 };
 
-//Check if object reference points to an authorization token
-function isAuthToken(obj) {
-   return '_token' in obj;
-}
-
 //Check if the data product request is HTTP POST or GET
 function isHttpPost(apiPrms) {
    return 'getHttpPostBody' in apiPrms;
@@ -406,7 +401,7 @@ function isHttpPost(apiPrms) {
 function execHttpReqResp() {
    let httpAttr, httpPostBody = null, prms;
 
-   if(isAuthToken(this)) { //API call for authorization token
+   if(this instanceof AuthToken) { //API call for authorization token
       prms = apiParams[this._api.id].authToken;
 
       httpAttr = prms.getHttpAttr();
@@ -435,7 +430,7 @@ function execHttpReqResp() {
             this._obtainedAt = Date.now();
             this._productDB = false;
 
-            // ... then process the raw JSON response as returned by the API
+            // ... then process the raw XML/JSON response as returned by the API
             let respBody = body.join('');
 
             if(resp.statusCode < 200 || resp.statusCode > 299) {
@@ -498,7 +493,7 @@ const getDataStruct = sProduct => {
    }
 
    return sDataStruct;
-}
+};
 
 const iniApi = sAPI => { //Return the API object based on the ID provided
    sAPI = sAPI || apis[apiDpl].id; //Default provided
@@ -598,7 +593,7 @@ function processAuthTokenDB(rowCount) {
       console.log('Token (' + this._api.id +  ') retrieved from database = ' + this._token.substring(0, 3) +
          ' ... ' + this._token.substring(this._token.length - 2));
 
-      if(!this._token || this._token.length == 0 || this.renewAdvised) {
+      if(!this._token || this._token.length === 0 || this.renewAdvised) {
          console.log('Token invalid or (nearly) expired, get new token online');
          bRenewToken = true;
       }
@@ -732,7 +727,7 @@ class AuthToken extends EvntEmit {
    }
 
    get expiresInMins() { //Return the number of minutes until the token expires
-      if(this._expiresIn == 0 || this._obtainedAt === undefined) return 0;
+      if(this._expiresIn === 0 || this._obtainedAt === undefined) return 0;
 
       let mins = (this._obtainedAt + (this._expiresIn * 1000) - Date.now()) / 60000;
 
@@ -837,7 +832,7 @@ function getDataProductDB() {
                          this._rawRsltProduct = rslt.rows[0].product;
                      }
                      else {
-                        this._oRsltProduct = rslt.rows[0].product;
+                        this._objRsltProduct = rslt.rows[0].product;
                      }
                      this._obtainedAt = rslt.rows[0].poa;
                      this._productDB = true;
@@ -880,13 +875,13 @@ function DataProductToDB() {
 function processHttpResp(respBody) {
    if(this._product.api.id === apis[apiDit].id) {
       //Parse the HTTP response
-      this._oRsltProduct = new domParser().parseFromString(respBody, 'text/xml');
+      this._objRsltProduct = new domParser().parseFromString(respBody, 'text/xml');
 
       //Strip the SOAP envelope from the response
-      this._oRsltProduct = this._oRsltProduct.getElementsByTagName('DGX')[0];
+      this._objRsltProduct = this._objRsltProduct.getElementsByTagName('DGX')[0];
 
       //The stripped product will be written to the database
-      this._rawRsltProduct = new domSerializer().serializeToString(this._oRsltProduct);
+      this._rawRsltProduct = new domSerializer().serializeToString(this._objRsltProduct);
 
       //The D&B Data Integration Toolkit is a SOAP API and therefore tends to
       //communicate errors in the message body (where REST APIs are more likely
@@ -895,7 +890,7 @@ function processHttpResp(respBody) {
       //for error codes.
       let iStatus; //Integer value of the main status code reurned
 
-      let statusNodes = this._oRsltProduct.getElementsByTagName('STATUS');
+      let statusNodes = this._objRsltProduct.getElementsByTagName('STATUS');
       let statusCodeNode = null;
 
       for(let i = 0; i < statusNodes.length; i++) {
@@ -907,7 +902,7 @@ function processHttpResp(respBody) {
             iStatus = parseInt(statusCodeNode.childNodes[0].nodeValue);
          }
 
-         if(iStatus === null || isNaN(iStatus) || iStatus != 0) {
+         if(iStatus === null || isNaN(iStatus) || iStatus !== 0) {
             let msgInfo = '<![CDATA[D&B Toolkit GDP request returned an error status code';
             msgInfo += ' (code: ' + iStatus + ')]]>';
 
@@ -939,8 +934,8 @@ class DataProduct extends EvntEmit {
       this._versionID = iniVersionID.call(this, versionID); //The data product version
       this._productDB = null;                               //Boolean indicating whether the data product was retrieved from the database
       this._obtainedAt = null;                              //Timestamp -> data product available
-      this._rawRsltProduct = null;                          //The JSON as returned by the API
-      this._oRsltProduct = null;                            //Object representation of the data product
+      this._rawRsltProduct = null;                          //The XML/JSON as returned by the API
+      this._objRsltProduct = null;                          //Object representation of the data product
 
       //This is where the rubber meets the road. Default behaviour of the API
       //is to first check the database for availability of the requested key.
@@ -960,7 +955,7 @@ class DataProduct extends EvntEmit {
             //parameter was set to true or (2) the database does not contain the
             //sKey requested. Either way, in case the row count returned is zero
             //a new data product will be requested online.
-            if(rowCount == 0) {
+            if(rowCount === 0) {
                return execHttpReqResp.call(this);
             }
             //The data product was loaded from the datatabse in function
@@ -1025,15 +1020,15 @@ class DataProduct extends EvntEmit {
       return this._obtainedAt;
    }
 
-   get rsltJSON() { //JSON as returned by the API
+   get rsltTxt() { //Sructured text (i.e. XML/JSON) as returned by the API
       if(this._rawRsltProduct) return this._rawRsltProduct;
 
-      if(this._oRsltProduct) {
+      if(this._objRsltProduct) {
          if(this._product.api.struct === ahGlob.dataStruct[ahGlob.structXML]) {
-            return this._rawRsltProduct = new domSerializer().serializeToString(this._oRsltProduct)
+            return this._rawRsltProduct = new domSerializer().serializeToString(this._objRsltProduct);
          }
          else { //JSON
-            return this.rawRsltProduct = JSON.stringify(this._oRsltProduct);
+            return this.rawRsltProduct = JSON.stringify(this._objRsltProduct);
          }
       }
 
@@ -1041,14 +1036,14 @@ class DataProduct extends EvntEmit {
    }
 
    get rsltObj() {  //Return the data product as a JavaScript object
-      if(this._oRsltProduct) return this._oRsltProduct;
+      if(this._objRsltProduct) return this._objRsltProduct;
 
       if(this._rawRsltProduct) {
          if(this._product.api.struct === ahGlob.dataStruct[ahGlob.structXML]) {
-            return this._oRsltProduct = new domParser().parseFromString(this._rawRsltProduct, 'text/xml');
+            return this._objRsltProduct = new domParser().parseFromString(this._rawRsltProduct, 'text/xml');
          }
          else {
-            return this._oRsltProduct = JSON.parse(this._rawRsltProduct);
+            return this._objRsltProduct = JSON.parse(this._rawRsltProduct);
          }
       }
 
