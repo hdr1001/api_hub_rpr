@@ -30,22 +30,26 @@ const ahErr = require('./ah_rpr_err.js');
 const apis = [
    {id: 'dpl', struct: ahGlob.dataStruct[ahGlob.structJSON]}, 
    {id: 'd2o', struct: ahGlob.dataStruct[ahGlob.structJSON]},
-   {id: 'dit', struct: ahGlob.dataStruct[ahGlob.structXML]}
+   {id: 'dit', struct: ahGlob.dataStruct[ahGlob.structXML]},
+   {id: 'lei', struct: ahGlob.dataStruct[ahGlob.structJSON]}
 ];
 
 const apiDpl = 0; //D&B Direct+
 const apiD2o = 1; //D&B Direct 2.0 Onboard
 const apiDit = 2; //D&B Toolkit
+const apiLei = 3; //GLEIF
 
 //Provider hosting the API
-const providers = ['dnb'];
+const providers = ['dnb', 'gleif'];
 
-const prvdrDnb = 0; //D&B (Dun & Bradstreet)
+const prvdrDnb = 0;   //D&B (Dun & Bradstreet)
+const prvdrGleif = 1; //GLEIF (Global Legal Entity Identifier Foundation)
 
 //Identifying keys
-const keys = ['duns'];
+const keys = ['duns', 'lei'];
 
 const keyDnb = 0; //D&B (i.e. DUNS)
+const keyLei = 1; //GLEIF Legal Entity Identifier
 
 //Supported products
 const products = [
@@ -97,6 +101,13 @@ const products = [
       provider: providers[prvdrDnb],
       key: keys[keyDnb],
       versions: ['v1']
+   },
+
+   {  prodID: 'lei_ref',
+      api: apis[apiLei],
+      provider: providers[prvdrGleif],
+      key: keys[keyLei],
+      versions: ['v2']
    }
 ];
 
@@ -107,6 +118,7 @@ const cmp_bos_d2o = 3;
 const gdpem = 4;
 const cmpcvf = 5;
 const cmpbos = 6;
+const lei_ref = 7;
 
 //This code defines event emitting classes so ...
 const EvntEmit = require('events');
@@ -175,7 +187,7 @@ const sqlPrepStmts = {
       let sSQL = 'INSERT INTO products_' + this._product.provider + ' ';
       sSQL += '(' + this._product.key + ', ' + this._product.prodID + ', ' + this._product.prodID + '_obtained_at) ';
       sSQL += 'VALUES ($1, $2, $3) ';
-      sSQL += 'ON CONFLICT (duns) DO UPDATE SET ';
+      sSQL += 'ON CONFLICT (' + this._product.key + ') DO UPDATE SET ';
       sSQL += this._product.prodID + ' = $2, ';
       sSQL += this._product.prodID + '_obtained_at = $3';;
       //console.log('SQL insDataProduct -> ' + sSQL);
@@ -385,6 +397,28 @@ const apiParams = {
             ret += '</wsp:ws_OtherGDPProducts></soapenv:Body>';
             ret += '</soapenv:Envelope>';
             //console.log(ret);
+
+            return ret;
+         }
+      }
+   },
+   [apis[apiLei].id]: { //GLEIF
+      dataProduct: {
+         getHttpAttr: function() {
+            const ret = {
+               host: 'leilookup.gleif.org',
+               path: '/api/' + this._versionID + '/leirecords',
+               method: 'GET',
+               headers: {
+                  'Content-Type': 'application/json'
+               }
+            };
+
+            const oQryStr = {
+               lei: this._sKey
+            };
+
+            ret.path += '?' + qryStr.stringify(oQryStr);
 
             return ret;
          }

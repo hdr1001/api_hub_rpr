@@ -28,25 +28,32 @@
 -- DROP FUNCTION public.f_archive_cmpcvf();
 -- DROP TRIGGER trgr_archive_cmpbos ON public.products_dnb;
 -- DROP FUNCTION public.f_archive_cmpbos();
+-- DROP TRIGGER trgr_archive_lei_ref ON public.products_gleif;
+-- DROP FUNCTION public.f_archive_lei_ref();
 -- ALTER TABLE public.auth_tokens DROP CONSTRAINT auth_tokens_pkey;
 -- ALTER TABLE public.products_dnb DROP CONSTRAINT products_dnb_pkey;
+-- ALTER TABLE public.products_gleif DROP CONSTRAINT products_gleif_pkey;
 -- ALTER TABLE public.archive_cmpelk DROP CONSTRAINT archive_cmpelk_pkey;
 -- ALTER TABLE public.archive_cmptcs DROP CONSTRAINT archive_cmptcs_pkey;
 -- ALTER TABLE public.archive_cmpcvf DROP CONSTRAINT archive_cmpcvf_pkey;
 -- ALTER TABLE public.archive_cmpbos DROP CONSTRAINT archive_cmpbos_pkey;
+-- ALTER TABLE public.archive_lei_ref DROP CONSTRAINT archive_lei_ref_pkey;
 -- DROP INDEX public.auth_tokens_api_id_desc_idx;
 -- DROP TABLE public.auth_tokens;
 -- DROP TABLE public.products_dnb;
+-- DROP TABLE public.products_gleif;
 -- DROP TABLE public.archive_cmpelk;
 -- DROP TABLE public.archive_cmptcs;
 -- DROP TABLE public.archive_cmpcvf;
 -- DROP TABLE public.archive_cmpbos;
+-- DROP TABLE public.archive_lei_ref;
 -- DROP TABLE public.id_res;
 -- DROP SEQUENCE public.auth_tokens_id_seq;
 -- DROP SEQUENCE public.archive_cmpelk_id_seq;
 -- DROP SEQUENCE public.archive_cmptcs_id_seq;
 -- DROP SEQUENCE public.archive_cmpcvf_id_seq;
 -- DROP SEQUENCE public.archive_cmpbos_id_seq;
+-- DROP SEQUENCE public.archive_lei_ref_id_seq;
 -- DROP SEQUENCE public.id_res_id_seq;
 
 -- Create the sequence for the primary key of table auth_tokens
@@ -83,6 +90,14 @@ CREATE SEQUENCE public.archive_cmpcvf_id_seq
 
 -- Create the sequence for the primary key of table archive_cmpbos
 CREATE SEQUENCE public.archive_cmpbos_id_seq
+    INCREMENT 1
+    START 1
+    MINVALUE 1
+    MAXVALUE 9223372036854775807
+    CACHE 1;
+
+-- Create the sequence for the primary key of table archive_lei_ref
+CREATE SEQUENCE public.archive_lei_ref_id_seq
     INCREMENT 1
     START 1
     MINVALUE 1
@@ -130,6 +145,18 @@ CREATE TABLE public.products_dnb (
     cmpbos JSONB,
     cmpbos_obtained_at bigint,
     CONSTRAINT products_dnb_pkey PRIMARY KEY (duns)
+)
+WITH (
+    OIDS = false
+)
+TABLESPACE pg_default;
+
+-- Create table for storing GLEIF data products
+CREATE TABLE public.products_gleif (
+    lei character varying(32) COLLATE pg_catalog."default",
+    lei_ref JSONB,
+    lei_ref_obtained_at bigint,
+    CONSTRAINT products_gleif_pkey PRIMARY KEY (lei)
 )
 WITH (
     OIDS = false
@@ -186,6 +213,20 @@ CREATE TABLE public.archive_cmpbos (
     obtained_at bigint,
     archived_at bigint,
     CONSTRAINT archive_cmpbos_pkey PRIMARY KEY (id)
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+-- Create table for archiving a GLEIF reference data product
+CREATE TABLE public.archive_lei_ref (
+    id integer NOT NULL DEFAULT nextval('archive_lei_ref_id_seq'::regclass),
+    lei character varying(32) COLLATE pg_catalog."default",
+    product JSONB,
+    obtained_at bigint,
+    archived_at bigint,
+    CONSTRAINT archive_lei_ref_pkey PRIMARY KEY (id)
 )
 WITH (
     OIDS = FALSE
@@ -289,6 +330,25 @@ CREATE TRIGGER trgr_archive_cmpbos
     ON public.products_dnb
     FOR EACH ROW
     EXECUTE PROCEDURE public.f_archive_cmpbos();
+
+-- Create a function to archive a GLEIF reference data product
+CREATE FUNCTION public.f_archive_lei_ref()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+AS $BODY$
+BEGIN
+    INSERT INTO archive_lei_ref(lei, product, obtained_at, archived_at)
+    VALUES (OLD.lei, OLD.lei_ref, OLD.lei_ref_obtained_at, NEW.lei_ref_obtained_at);
+    RETURN NEW;
+END;
+$BODY$;
+
+-- Create a database trigger to archive a GLEIF reference data product on update
+CREATE TRIGGER trgr_archive_lei_ref
+    AFTER UPDATE OF lei_ref
+    ON public.products_gleif
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.f_archive_lei_ref();
 
 -- Insert a couple of default records
 INSERT INTO auth_tokens (api, token, expires_in, obtained_at) VALUES('dpl', '', 0, 946681200000);
