@@ -12,6 +12,8 @@ Supported APIs
 3. D&B Direct 2.0 Onboard (https://docs.dnb.com/direct/2.0/en-US/onboard-rest-API)
    - Compliance Verification Identity
    - Compliance Beneficial Ownership Structure
+4. GLEIF (https://www.gleif.org/en/lei-data/gleif-lei-look-up-api/access-the-api#)
+   -Reference data
 
 © 2019 Hans de Rooij
 
