@@ -13,7 +13,7 @@ Supported APIs
    - Compliance Verification Identity
    - Compliance Beneficial Ownership Structure
 4. GLEIF (https://www.gleif.org/en/lei-data/gleif-lei-look-up-api/access-the-api#)
-   -Reference data
+   - Reference data
 
 © 2019 Hans de Rooij
 
