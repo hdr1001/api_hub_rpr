@@ -1,6 +1,9 @@
 # api_hub_rpr
 Application Programming Interface Hub - Request Persist Respond
 
+THIS REPOSITORY IS NO LONGER ACTIVELY SUPPORTED!
+Please switch to api_hub_rpr_v3x (https://github.com/hdr1001/api_hub_rpr_v3x)
+
 Supported APIs
 1. D&B Direct+ (https://directplus.documentation.dnb.com/)
    - Company profile, linkage and executives
